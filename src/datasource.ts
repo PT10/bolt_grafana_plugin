@@ -1,4 +1,4 @@
-import { DataQueryRequest, DataSourceApi, DataSourceInstanceSettings, MetricFindValue } from '@grafana/ui';
+import { DataQueryRequest, DataSourceApi, DataSourceInstanceSettings } from '@grafana/ui';
 import { DataFrame } from '@grafana/data';
 import { BoltQuery, BoltOptions } from './types';
 import { getBackendSrv } from '@grafana/runtime';
@@ -10,6 +10,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   anCollection = '';
   rawCollection = '';
   backendSrv: any;
+  qTemp: any;
 
   constructor(instanceSettings: DataSourceInstanceSettings<BoltOptions>) {
     super(instanceSettings);
@@ -26,17 +27,32 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     this.backendSrv = getBackendSrv();
   }
 
-  metricFindQuery(query: string, options?: any): Promise<MetricFindValue[]> {
-    return new Promise((resolve, reject) => {
-      const names = [];
-      for (const series of this.data) {
-        for (const field of series.fields) {
-          names.push({
-            text: field.name,
-          });
-        }
+  metricFindQuery(query: string) {
+    if (!this.anCollection || !this.rawCollection) {
+      return [];
+    }
+
+    if (query.includes(',')) {
+      const queryParams = query.split(',');
+      query = queryParams[0];
+    }
+
+    const facetFields = query;
+    const url = this.baseUrl + '/' + this.anCollection + '/select?q=*:*&facet=true&facet.field=' + facetFields + '&wt=json&rows=0';
+    const params = {
+      url: url,
+      method: 'GET',
+    };
+    return this.backendSrv.datasourceRequest(params).then((response: any) => {
+      if (response.status === 200) {
+        return Utils.mapToTextValue(response);
+      } else {
+        return {
+          status: 'error',
+          message: 'Error',
+          title: 'Error',
+        };
       }
-      resolve(names);
     });
   }
 

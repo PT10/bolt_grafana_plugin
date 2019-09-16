@@ -178,28 +178,33 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         )}
         {queryType !== 'facet' && queryType !== 'single' && (
           <div className="gf-form-inline">
-            <div className="gf-form">
-              <FormField
-                label="Sort"
-                type="text"
-                value={sortField}
-                labelWidth={labelWidth}
-                width={4}
-                name="sortField"
-                onChange={this.onFieldValueChange}
-              ></FormField>
-            </div>
-            <div className="gf-form">
-              <FormLabel width={labelWidth}>Order</FormLabel>
-              <select onChange={(event: any) => this.onFieldValueChange(event, 'sortOrder')}>
-                <option value="asc" selected={sortOrder === 'asc'}>
-                  Ascending
-                </option>
-                <option value="desc" selected={sortOrder === 'desc'}>
-                  Descending
-                </option>
-              </select>
-            </div>
+            {queryType !== 'chart' && (
+              <div>
+                <div className="gf-form">
+                  <FormField
+                    label="Sort"
+                    type="text"
+                    value={sortField}
+                    labelWidth={labelWidth}
+                    width={4}
+                    name="sortField"
+                    onChange={this.onFieldValueChange}
+                  ></FormField>
+                </div>
+                <div className="gf-form">
+                  <FormLabel width={labelWidth}>Order</FormLabel>
+                  <select onChange={(event: any) => this.onFieldValueChange(event, 'sortOrder')}>
+                    <option value="asc" selected={sortOrder === 'asc'}>
+                      Ascending
+                    </option>
+                    <option value="desc" selected={sortOrder === 'desc'}>
+                      Descending
+                    </option>
+                  </select>
+                </div>
+              </div>
+            )}
+
             <div className="gf-form">
               <FormField
                 label="Out Fields"

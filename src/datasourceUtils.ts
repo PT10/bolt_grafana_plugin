@@ -70,12 +70,16 @@ export class Utils {
       seriesList.sort((a: any, b: any) => {
         let totalA = 0;
         let totalB = 0;
-        a.datapoints.map((d: any) => {
-          totalA += d[0];
-        });
-        b.datapoints.map((d: any) => {
-          totalB += d[0];
-        });
+        if (a.datapoints && b.datapoints) {
+          a.datapoints.map((d: any) => {
+            totalA += d[0];
+          });
+          b.datapoints.map((d: any) => {
+            totalB += d[0];
+          });
+        } else {
+          return 0;
+        }
 
         return totalA - totalB;
       });
@@ -109,11 +113,13 @@ export class Utils {
         index++;
         rows.push(row);
       });
-      seriesList = {
-        type: 'table',
-        columns: columns,
-        rows: rows,
-      };
+      seriesList = [
+        {
+          type: 'table',
+          columns: columns,
+          rows: rows,
+        },
+      ];
     } else if (format === 'single') {
       seriesList = [];
       seriesList.push({
@@ -147,5 +153,43 @@ export class Utils {
     return {
       data: seriesList,
     };
+  }
+
+  static mapToTextValue(result: any) {
+    if (result.data.collections) {
+      return result.data.collections.map((collection: string) => {
+        return {
+          text: collection,
+          value: collection,
+        };
+      });
+    }
+    if (result.data.facet_counts) {
+      const ar = [];
+      for (const key in result.data.facet_counts.facet_fields) {
+        if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
+          const array = result.data.facet_counts.facet_fields[key];
+          for (let i = 0; i < array.length; i += 2) {
+            // take every second element
+            ar.push({
+              text: array[i],
+              expandable: false,
+            });
+          }
+        }
+      }
+      return ar;
+    }
+    if (result.data) {
+      return result.data
+        .split('\n')[0]
+        .split(',')
+        .map((field: string) => {
+          return {
+            text: field,
+            value: field,
+          };
+        });
+    }
   }
 }

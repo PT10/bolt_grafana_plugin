@@ -365,55 +365,37 @@ function (_super) {
     return _this;
   }
 
-  BoltDatasource.prototype.metricFindQuery = function (query, options) {
-    var _this = this;
+  BoltDatasource.prototype.metricFindQuery = function (query) {
+    if (!this.anCollection || !this.rawCollection) {
+      return [];
+    }
 
-    return new Promise(function (resolve, reject) {
-      var e_1, _a, e_2, _b;
+    if (query.includes(',')) {
+      var queryParams = query.split(',');
+      query = queryParams[0];
+    }
 
-      var names = [];
-
-      try {
-        for (var _c = tslib__WEBPACK_IMPORTED_MODULE_0__["__values"](_this.data), _d = _c.next(); !_d.done; _d = _c.next()) {
-          var series = _d.value;
-
-          try {
-            for (var _e = (e_2 = void 0, tslib__WEBPACK_IMPORTED_MODULE_0__["__values"](series.fields)), _f = _e.next(); !_f.done; _f = _e.next()) {
-              var field = _f.value;
-              names.push({
-                text: field.name
-              });
-            }
-          } catch (e_2_1) {
-            e_2 = {
-              error: e_2_1
-            };
-          } finally {
-            try {
-              if (_f && !_f.done && (_b = _e["return"])) _b.call(_e);
-            } finally {
-              if (e_2) throw e_2.error;
-            }
-          }
-        }
-      } catch (e_1_1) {
-        e_1 = {
-          error: e_1_1
+    var facetFields = query;
+    var url = this.baseUrl + '/' + this.anCollection + '/select?q=*:*&facet=true&facet.field=' + facetFields + '&wt=json&rows=0';
+    var params = {
+      url: url,
+      method: 'GET'
+    };
+    return this.backendSrv.datasourceRequest(params).then(function (response) {
+      if (response.status === 200) {
+        return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].mapToTextValue(response);
+      } else {
+        return {
+          status: 'error',
+          message: 'Error',
+          title: 'Error'
         };
-      } finally {
-        try {
-          if (_d && !_d.done && (_a = _c["return"])) _a.call(_c);
-        } finally {
-          if (e_1) throw e_1.error;
-        }
       }
-
-      resolve(names);
     });
   };
 
   BoltDatasource.prototype.query = function (options) {
-    var e_3, _a;
+    var e_1, _a;
 
     var _loop_1 = function _loop_1(query) {
       var collection = query.collection;
@@ -471,15 +453,15 @@ function (_super) {
 
         if (_typeof(state_1) === "object") return state_1.value;
       }
-    } catch (e_3_1) {
-      e_3 = {
-        error: e_3_1
+    } catch (e_1_1) {
+      e_1 = {
+        error: e_1_1
       };
     } finally {
       try {
         if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
       } finally {
-        if (e_3) throw e_3.error;
+        if (e_1) throw e_1.error;
       }
     }
   };
@@ -605,12 +587,18 @@ function () {
       seriesList.sort(function (a, b) {
         var totalA = 0;
         var totalB = 0;
-        a.datapoints.map(function (d) {
-          totalA += d[0];
-        });
-        b.datapoints.map(function (d) {
-          totalB += d[0];
-        });
+
+        if (a.datapoints && b.datapoints) {
+          a.datapoints.map(function (d) {
+            totalA += d[0];
+          });
+          b.datapoints.map(function (d) {
+            totalB += d[0];
+          });
+        } else {
+          return 0;
+        }
+
         return totalA - totalB;
       });
     } else if (format === 'table') {
@@ -652,11 +640,11 @@ function () {
         index_1++;
         rows_1.push(row);
       });
-      seriesList = {
+      seriesList = [{
         type: 'table',
         columns: columns_1,
         rows: rows_1
-      };
+      }];
     } else if (format === 'single') {
       seriesList = [];
       seriesList.push({
@@ -692,6 +680,46 @@ function () {
     return {
       data: seriesList
     };
+  };
+
+  Utils.mapToTextValue = function (result) {
+    if (result.data.collections) {
+      return result.data.collections.map(function (collection) {
+        return {
+          text: collection,
+          value: collection
+        };
+      });
+    }
+
+    if (result.data.facet_counts) {
+      var ar = [];
+
+      for (var key in result.data.facet_counts.facet_fields) {
+        if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
+          var array = result.data.facet_counts.facet_fields[key];
+
+          for (var i = 0; i < array.length; i += 2) {
+            // take every second element
+            ar.push({
+              text: array[i],
+              expandable: false
+            });
+          }
+        }
+      }
+
+      return ar;
+    }
+
+    if (result.data) {
+      return result.data.split('\n')[0].split(',').map(function (field) {
+        return {
+          text: field,
+          value: field
+        };
+      });
+    }
   };
 
   return Utils;
@@ -921,7 +949,7 @@ function (_super) {
       }, f.displayName);
     })))), queryType !== 'facet' && queryType !== 'single' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }, queryType !== 'chart' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Sort",
@@ -945,7 +973,7 @@ function (_super) {
     }, "Ascending"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
       value: "desc",
       selected: sortOrder === 'desc'
-    }, "Descending"))), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }, "Descending")))), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Out Fields",
