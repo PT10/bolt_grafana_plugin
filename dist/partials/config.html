@@ -2,15 +2,14 @@
 </datasource-http-settings>
 
 <div class="tight-form">
-    <h3 class="page-heading">Solr settings</h3>
+    <h3 class="page-heading">Bolt settings</h3>
     <div class="gf-form-group">
       <div class="gf-form-inline">
         <div class="gf-form max-width-30">
-          <span class="gf-form-label width-16">Anomaly Collection Name</span>
+          <span class="gf-form-label width-16">Anomaly collection</span>
           <input
             class="gf-form-input ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required"
             type="text"
-            placeholder="Collection Name"
             min-length="0"
             data-provide="typeahead"
             name="anCollection"
@@ -20,17 +19,30 @@
       </div>
       <div class="gf-form-inline">
         <div class="gf-form max-width-30">
-          <span class="gf-form-label width-16">Raw Collection Name</span>
+          <span class="gf-form-label width-16">Timestamp field</span>
           <input
             class="gf-form-input ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required"
             type="text"
-            placeholder="Collection Name"
+            min-length="0"
+            data-provide="typeahead"
+            name="timestampField"
+            ng-model=ctrl.current.jsonData.timestampField
+          />
+        </div>
+
+      </div>
+      <!-- <div class="gf-form-inline">
+        <div class="gf-form max-width-30">
+          <span class="gf-form-label width-16">Incidents collection</span>
+          <input
+            class="gf-form-input ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required"
+            type="text"
             min-length="0"
             data-provide="typeahead"
             name="rawCollection"
-            ng-model=ctrl.current.jsonData.rawCollection
+            ng-model=ctrl.current.jsonData.incidentCollection
           />
         </div>
-      </div>
+      </div> -->
     </div>
   </div>

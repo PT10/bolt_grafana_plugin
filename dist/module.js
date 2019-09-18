@@ -1,4 +1,4 @@
-define(["@grafana/runtime","@grafana/ui","react"], function(__WEBPACK_EXTERNAL_MODULE__grafana_runtime__, __WEBPACK_EXTERNAL_MODULE__grafana_ui__, __WEBPACK_EXTERNAL_MODULE_react__) { return /******/ (function(modules) { // webpackBootstrap
+define(["@grafana/runtime","@grafana/ui","lodash","react"], function(__WEBPACK_EXTERNAL_MODULE__grafana_runtime__, __WEBPACK_EXTERNAL_MODULE__grafana_ui__, __WEBPACK_EXTERNAL_MODULE_lodash__, __WEBPACK_EXTERNAL_MODULE_react__) { return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
 /******/
@@ -331,7 +331,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _grafana_runtime__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @grafana/runtime */ "@grafana/runtime");
 /* harmony import */ var _grafana_runtime__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_grafana_runtime__WEBPACK_IMPORTED_MODULE_2__);
 /* harmony import */ var datasourceUtils__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! datasourceUtils */ "./datasourceUtils.ts");
-function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+/* harmony import */ var lodash__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! lodash */ "lodash");
+/* harmony import */ var lodash__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(lodash__WEBPACK_IMPORTED_MODULE_4__);
 
 
 
@@ -349,7 +350,11 @@ function (_super) {
     _this.data = [];
     _this.baseUrl = '';
     _this.anCollection = '';
-    _this.rawCollection = '';
+    _this.timestampField = 'timestamp';
+    _this.facets = {
+      aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
+      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"}}}}}}}}'
+    };
     _this.baseUrl = instanceSettings.url;
 
     if (_this.baseUrl.endsWith('/')) {
@@ -358,7 +363,7 @@ function (_super) {
 
     if (instanceSettings.jsonData) {
       _this.anCollection = instanceSettings.jsonData.anCollection;
-      _this.rawCollection = instanceSettings.jsonData.rawCollection;
+      _this.timestampField = instanceSettings.jsonData.timestampField;
     }
 
     _this.backendSrv = Object(_grafana_runtime__WEBPACK_IMPORTED_MODULE_2__["getBackendSrv"])();
@@ -366,17 +371,24 @@ function (_super) {
   }
 
   BoltDatasource.prototype.metricFindQuery = function (query) {
-    if (!this.anCollection || !this.rawCollection) {
-      return [];
+    if (!query || query.length === 0) {
+      return Promise.resolve([]);
     }
 
-    if (query.includes(',')) {
-      var queryParams = query.split(',');
-      query = queryParams[0];
+    var pattern = /^(.*)\((.*)\)$/;
+    var matches = query.match(pattern);
+
+    if (!matches || matches.length !== 3) {
+      return Promise.reject({
+        status: 'error',
+        message: 'Supported format is: <collection_name>(<field_name>)',
+        title: 'Error while adding the variable'
+      });
     }
 
-    var facetFields = query;
-    var url = this.baseUrl + '/' + this.anCollection + '/select?q=*:*&facet=true&facet.field=' + facetFields + '&wt=json&rows=0';
+    var collection = matches[1];
+    var field = matches[2];
+    var url = this.baseUrl + '/' + collection + '/select?q=*:*&facet=true&facet.field=' + field + '&wt=json&rows=0';
     var params = {
       url: url,
       method: 'GET'
@@ -395,75 +407,68 @@ function (_super) {
   };
 
   BoltDatasource.prototype.query = function (options) {
-    var e_1, _a;
+    var _this = this;
 
-    var _loop_1 = function _loop_1(query) {
-      var collection = query.collection;
+    var targetPromises = options.targets.map(function (query) {
+      var collection = lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType) ? _this.anCollection : query.collection;
       var q = query.query;
 
-      if (!q || !collection) {
-        return "continue";
+      if (!q) {
+        return;
       }
 
       var numRows = ['single', 'facet'].includes(query.queryType) ? 0 : query.numRows;
       var startTime = options.range.from.toISOString();
       var endTime = options.range.to.toISOString();
       var solrQuery = {
-        fq: query.timeField + ':[' + startTime + ' TO ' + endTime + ']',
+        fq: _this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
         q: q,
-        fl: query.timeField + (query.fl ? ',' + query.fl : ''),
+        fl: _this.timestampField + (query.fl ? ',' + query.fl : ''),
         rows: numRows,
         start: 0,
-        sort: query.sortField + ' ' + query.sortOrder,
         getRawMessages: query.queryType === 'table' ? true : false
       };
 
-      if (query.queryType === 'facet' && query.facetQuery) {
+      if (query.sortField) {
+        solrQuery['sort'] = query.sortField + ' ' + query.sortOrder;
+      } else if (query.queryType === 'chart') {
+        solrQuery['sort'] = 'timestamp asc';
+      }
+
+      if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
         solrQuery['facet'] = true;
-        solrQuery['json.facet'] = query.facetQuery.replace('__START_TIME__', startTime).replace('__END_TIME__', endTime);
+        solrQuery['json.facet'] = _this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime);
+      } else {
+        delete solrQuery['facet'];
+        delete solrQuery['json.facet'];
       }
 
       var params = {
-        url: this_1.baseUrl + '/' + collection + '/select?wt=json',
+        url: _this.baseUrl + '/' + collection + '/select?wt=json',
         method: 'GET',
         params: solrQuery
       };
-      return {
-        value: this_1.backendSrv.datasourceRequest(params).then(function (response) {
-          if (response.status === 200) {
-            return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, query.timeField);
-          } else {
-            return {
-              status: 'error',
-              message: 'Error',
-              title: 'Error'
-            };
-          }
+      return _this.backendSrv.datasourceRequest(params).then(function (response) {
+        if (response.status === 200) {
+          return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField);
+        } else {
+          return {
+            status: 'error',
+            message: 'Error',
+            title: 'Error'
+          };
+        }
+      });
+    }).values();
+    return Promise.all(targetPromises).then(function (responses) {
+      var result = {
+        data: responses.map(function (response) {
+          return response.data;
         })
       };
-    };
-
-    var this_1 = this;
-
-    try {
-      for (var _b = tslib__WEBPACK_IMPORTED_MODULE_0__["__values"](options.targets), _c = _b.next(); !_c.done; _c = _b.next()) {
-        var query = _c.value;
-
-        var state_1 = _loop_1(query);
-
-        if (_typeof(state_1) === "object") return state_1.value;
-      }
-    } catch (e_1_1) {
-      e_1 = {
-        error: e_1_1
-      };
-    } finally {
-      try {
-        if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
-      } finally {
-        if (e_1) throw e_1.error;
-      }
-    }
+      result.data = lodash__WEBPACK_IMPORTED_MODULE_4___default.a.flatten(result.data);
+      return result;
+    });
   };
 
   BoltDatasource.prototype.testDatasource = function () {
@@ -801,48 +806,18 @@ function (_super) {
       onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, (_b = {}, _b[name] = value, _b)));
     };
 
-    _this.resetFields = function () {
-      _this.setState({
-        fl: '',
-        numRows: 100,
-        start: 0,
-        facetQuery: '',
-        sortField: _this.props.query.timeField,
-        sortOrder: 'desc'
-      });
-
-      var onChange = _this.props.onChange;
-      onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, {
-        fl: '',
-        numRows: 100,
-        start: 0,
-        facetQuery: '',
-        sortField: _this.props.query.timeField,
-        sortOrder: 'desc'
-      }));
-    };
-
-    var query = _this.props.query.query || '';
-    var collection = _this.props.query.collection || '';
-    var timeField = _this.props.query.timeField || 'timestamp';
-    var fl = _this.props.query.fl || '';
-    var queryType = _this.props.query.queryType || 'chart';
-    var numRows = _this.props.query.numRows || 100;
-    var start = _this.props.query.start || 0;
-    var facetQuery = _this.props.query.facetQuery || '';
-    var sortField = _this.props.query.sortField || timeField;
-    var sortOrder = _this.props.query.sortOrder || 'desc';
+    var query = _this.props.query;
+    _this.query = query;
     _this.state = tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.state, {
-      query: query,
-      collection: collection,
-      timeField: timeField,
-      fl: fl,
-      queryType: queryType,
-      numRows: numRows,
-      start: start,
-      facetQuery: facetQuery,
-      sortField: sortField,
-      sortOrder: sortOrder
+      query: query.query,
+      collection: query.collection,
+      fl: query.fl,
+      queryType: query.queryType || 'chart',
+      numRows: query.numRows || 100,
+      start: query.start || 0,
+      facetQuery: query.facetQuery,
+      sortField: query.sortField,
+      sortOrder: query.sortOrder
     });
     var onChange = _this.props.onChange;
     onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, _this.state));
@@ -862,29 +837,22 @@ function (_super) {
       value: 'single',
       displayName: 'Single'
     }, {
-      value: 'facet',
-      displayName: 'Facet'
+      displayName: 'Aggregated Anomalies',
+      value: 'aggAnomaly'
+    }, {
+      displayName: 'Individual Anomalies',
+      value: 'indvAnomaly'
     }];
     var _a = this.state,
         query = _a.query,
         collection = _a.collection,
-        timeField = _a.timeField,
         fl = _a.fl,
         queryType = _a.queryType,
         numRows = _a.numRows,
         start = _a.start,
-        facetQuery = _a.facetQuery,
         sortField = _a.sortField,
         sortOrder = _a.sortOrder;
-    var labelWidth = 8; // const facetOptions = [{ value: 'Heat Map', displayName: 'Heatmap' }, { value: 'Line chatrt', displayName: 'Line chart' }];
-
-    var facetOptions = [{
-      displayName: 'HeatMap Facet Query',
-      value: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}'
-    }, {
-      displayName: 'LineChart FacetQuery',
-      value: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"}}}}}}}}'
-    }];
+    var labelWidth = 8;
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
@@ -911,7 +879,7 @@ function (_super) {
       width: 4,
       name: "query",
       onChange: this.onFieldValueChange
-    })), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Collection",
@@ -921,35 +889,9 @@ function (_super) {
       width: 4,
       name: "collection",
       onChange: this.onFieldValueChange
-    })), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
-      className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
-      label: "Time Field",
-      type: "text",
-      value: timeField,
-      labelWidth: labelWidth,
-      width: 4,
-      name: "timeField",
-      onChange: this.onFieldValueChange
-    }))), queryType === 'facet' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }))), (queryType === 'chart' || queryType === 'table') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
-      className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormLabel"], {
-      width: labelWidth
-    }, "Facet Query"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
-      contentEditable: true,
-      value: facetQuery,
-      onChange: function onChange(event) {
-        return _this.onFieldValueChange(event, 'facetQuery');
-      }
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", null), facetOptions.map(function (f) {
-      return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
-        value: f.value
-      }, f.displayName);
-    })))), queryType !== 'facet' && queryType !== 'single' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
-      className: "gf-form-inline"
-    }, queryType !== 'chart' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }, queryType === 'table' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Sort",
@@ -983,7 +925,7 @@ function (_super) {
       width: 4,
       name: "fl",
       onChange: this.onFieldValueChange
-    })), queryType !== 'single' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), (queryType === 'table' || queryType === 'chart') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Number of rows",
@@ -1032,6 +974,17 @@ module.exports = __WEBPACK_EXTERNAL_MODULE__grafana_runtime__;
 /***/ (function(module, exports) {
 
 module.exports = __WEBPACK_EXTERNAL_MODULE__grafana_ui__;
+
+/***/ }),
+
+/***/ "lodash":
+/*!*************************!*\
+  !*** external "lodash" ***!
+  \*************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+module.exports = __WEBPACK_EXTERNAL_MODULE_lodash__;
 
 /***/ }),
 

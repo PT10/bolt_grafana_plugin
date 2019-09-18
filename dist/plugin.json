@@ -11,8 +11,8 @@
     },
     "keywords": ["Bolt"],
     "logos": {
-      "small": "img/logo.svg",
-      "large": "img/logo.svg"
+      "small": "img/logo.png",
+      "large": "img/logo.png"
     },
     "links": [
       {"name": "Website", "url": "https://github.com/grafana/simple-react-panel"},
@@ -20,7 +20,7 @@
     ],
     "screenshots": [],
     "version": "1.0.0",
-    "updated": "2019-09-16"
+    "updated": "2019-09-18"
   },
 
   "dependencies": {
