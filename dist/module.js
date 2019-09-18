@@ -344,25 +344,31 @@ var BoltDatasource =
 function (_super) {
   tslib__WEBPACK_IMPORTED_MODULE_0__["__extends"](BoltDatasource, _super);
 
-  function BoltDatasource(instanceSettings) {
+  function BoltDatasource(instanceSettings, $q, templateSrv) {
     var _this = _super.call(this, instanceSettings) || this;
 
     _this.data = [];
     _this.baseUrl = '';
     _this.anCollection = '';
+    _this.rawCollection = '';
     _this.timestampField = 'timestamp';
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
       indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"}}}}}}}}'
     };
+    _this.$q = $q;
+    _this.templateSrv = templateSrv;
     _this.baseUrl = instanceSettings.url;
 
     if (_this.baseUrl.endsWith('/')) {
-      _this.baseUrl = _this.baseUrl.substr(0, _this.baseUrl.length - 1);
+      _this.baseUrl += 'solr'; //this.baseUrl.substr(0, this.baseUrl.length - 1);
+    } else {
+      _this.baseUrl += '/solr';
     }
 
     if (instanceSettings.jsonData) {
       _this.anCollection = instanceSettings.jsonData.anCollection;
+      _this.rawCollection = instanceSettings.jsonData.rawCollection;
       _this.timestampField = instanceSettings.jsonData.timestampField;
     }
 
@@ -375,35 +381,21 @@ function (_super) {
       return Promise.resolve([]);
     }
 
-    var pattern = /^(.*)\((.*)\)$/;
-    var matches = query.match(pattern);
+    var pattern1 = /^(.*)\((.*)\)$/;
+    var pattern2 = /^getPageCount$/;
+    var matches = query.match(pattern1);
 
-    if (!matches || matches.length !== 3) {
+    if (matches && matches.length === 3) {
+      return this.getFields(matches);
+    } else if (query.match(pattern2)) {
+      return this.getTotalCount();
+    } else {
       return Promise.reject({
         status: 'error',
-        message: 'Supported format is: <collection_name>(<field_name>)',
+        message: 'Supported options are: <collection_name>(<field_name>) and getPageCount',
         title: 'Error while adding the variable'
       });
     }
-
-    var collection = matches[1];
-    var field = matches[2];
-    var url = this.baseUrl + '/' + collection + '/select?q=*:*&facet=true&facet.field=' + field + '&wt=json&rows=0';
-    var params = {
-      url: url,
-      method: 'GET'
-    };
-    return this.backendSrv.datasourceRequest(params).then(function (response) {
-      if (response.status === 200) {
-        return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].mapToTextValue(response);
-      } else {
-        return Promise.reject([{
-          status: 'error',
-          message: 'Error',
-          title: 'Error'
-        }]);
-      }
-    });
   };
 
   BoltDatasource.prototype.query = function (options) {
@@ -411,21 +403,25 @@ function (_super) {
 
     var targetPromises = options.targets.map(function (query) {
       var collection = lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType) ? _this.anCollection : query.collection;
-      var q = query.query;
 
-      if (!q) {
+      if (!query.query) {
         return Promise.resolve([]);
       }
 
-      var numRows = ['single', 'facet'].includes(query.queryType) ? 0 : query.numRows;
+      var q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(_this.templateSrv.replace(query.query, options.scopedVars));
+
+      var start = _this.templateSrv.replace(query.start, options.scopedVars);
+
+      var numRows = _this.templateSrv.replace(query.numRows.toString(), options.scopedVars) || 100;
+      numRows = ['single', 'facet'].includes(query.queryType) ? 0 : numRows;
       var startTime = options.range.from.toISOString();
       var endTime = options.range.to.toISOString();
       var solrQuery = {
         fq: _this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
         q: q,
         fl: _this.timestampField + (query.fl ? ',' + query.fl : ''),
-        rows: numRows,
-        start: 0,
+        rows: +numRows,
+        start: start,
         getRawMessages: query.queryType === 'table' ? true : false
       };
 
@@ -496,6 +492,70 @@ function (_super) {
         message: 'Data source is working',
         title: 'Success'
       };
+    });
+  };
+
+  BoltDatasource.prototype.getFields = function (matches) {
+    var collection = matches[1];
+    var field = matches[2];
+    var url = this.baseUrl + '/' + collection + '/select?q=*:*&facet=true&facet.field=' + field + '&wt=json&rows=0';
+    var params = {
+      url: url,
+      method: 'GET'
+    };
+    return this.backendSrv.datasourceRequest(params).then(function (response) {
+      if (response.status === 200) {
+        return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].mapToTextValue(response);
+      } else {
+        return Promise.reject([{
+          status: 'error',
+          message: 'Error',
+          title: 'Error'
+        }]);
+      }
+    });
+  };
+
+  BoltDatasource.prototype.getTotalCount = function () {
+    var _this = this;
+
+    var searchQuery = lodash__WEBPACK_IMPORTED_MODULE_4___default()(this.templateSrv.variables).find(function (v) {
+      return v.name === 'Search';
+    });
+
+    var url = this.baseUrl + '/' + this.rawCollection + '/select?q=' + searchQuery.query + '&rows=0' + '&fq=timestamp:[' + this.templateSrv.timeRange.from.toJSON() + ' TO ' + this.templateSrv.timeRange.to.toJSON() + ']';
+    var options = {
+      url: url,
+      method: 'GET'
+    };
+    return this.backendSrv.datasourceRequest(options).then(function (data) {
+      var pageSize = lodash__WEBPACK_IMPORTED_MODULE_4___default()(_this.templateSrv.variables).find(function (v) {
+        return v.name === 'PageSize';
+      });
+
+      var arr = [];
+
+      for (var i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
+        arr.push(i);
+      }
+
+      arr = arr.map(function (ele) {
+        return {
+          text: ele + 1,
+          value: ele
+        };
+      });
+      var firstNResults = arr.slice(0, 10);
+      var lastNResults = arr.splice(arr.length - 11, arr.length - 1);
+
+      if (firstNResults.length === 0 && lastNResults.length === 0) {
+        return [{
+          text: 0,
+          value: 0
+        }];
+      }
+
+      return firstNResults.concat(lastNResults);
     });
   };
 
@@ -682,6 +742,10 @@ function () {
       }
     }
 
+    if (!seriesList) {
+      seriesList = [];
+    }
+
     return {
       data: seriesList
     };
@@ -725,6 +789,10 @@ function () {
         };
       });
     }
+  };
+
+  Utils.queryBuilder = function (query) {
+    return query.replace(/{/g, '(').replace(/}/g, ')').replace(/,/g, ' OR ');
   };
 
   return Utils;

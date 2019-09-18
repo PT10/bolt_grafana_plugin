@@ -150,6 +150,9 @@ export class Utils {
       }
     }
 
+    if (!seriesList) {
+      seriesList = [];
+    }
     return {
       data: seriesList,
     };
@@ -191,5 +194,12 @@ export class Utils {
           };
         });
     }
+  }
+
+  static queryBuilder(query: string) {
+    return query
+      .replace(/{/g, '(')
+      .replace(/}/g, ')')
+      .replace(/,/g, ' OR ');
   }
 }

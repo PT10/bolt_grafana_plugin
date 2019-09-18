@@ -15,5 +15,6 @@ export interface BoltQuery extends DataQuery {
 export interface BoltOptions extends DataSourceJsonData {
   // Saved in the datasource
   anCollection: string;
+  rawCollection: string;
   timestampField: string;
 }

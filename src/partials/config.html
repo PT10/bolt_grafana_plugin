@@ -14,6 +14,20 @@
             data-provide="typeahead"
             name="anCollection"
             ng-model=ctrl.current.jsonData.anCollection
+            required
+          />
+        </div>
+      </div>
+      <div class="gf-form-inline">
+        <div class="gf-form max-width-30">
+          <span class="gf-form-label width-16">Raw Logs collection</span>
+          <input
+            class="gf-form-input ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required"
+            type="text"
+            min-length="0"
+            data-provide="typeahead"
+            name="rawCollection"
+            ng-model=ctrl.current.jsonData.rawCollection
           />
         </div>
       </div>
@@ -27,22 +41,9 @@
             data-provide="typeahead"
             name="timestampField"
             ng-model=ctrl.current.jsonData.timestampField
+            required
           />
         </div>
-
       </div>
-      <!-- <div class="gf-form-inline">
-        <div class="gf-form max-width-30">
-          <span class="gf-form-label width-16">Incidents collection</span>
-          <input
-            class="gf-form-input ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required"
-            type="text"
-            min-length="0"
-            data-provide="typeahead"
-            name="rawCollection"
-            ng-model=ctrl.current.jsonData.incidentCollection
-          />
-        </div>
-      </div> -->
     </div>
   </div>
