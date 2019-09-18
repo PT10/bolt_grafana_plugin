@@ -397,11 +397,11 @@ function (_super) {
       if (response.status === 200) {
         return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].mapToTextValue(response);
       } else {
-        return {
+        return Promise.reject([{
           status: 'error',
           message: 'Error',
           title: 'Error'
-        };
+        }]);
       }
     });
   };
@@ -414,7 +414,7 @@ function (_super) {
       var q = query.query;
 
       if (!q) {
-        return;
+        return Promise.resolve([]);
       }
 
       var numRows = ['single', 'facet'].includes(query.queryType) ? 0 : query.numRows;
@@ -452,11 +452,11 @@ function (_super) {
         if (response.status === 200) {
           return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField);
         } else {
-          return {
+          return Promise.reject([{
             status: 'error',
             message: 'Error',
             title: 'Error'
-          };
+          }]);
         }
       });
     }).values();

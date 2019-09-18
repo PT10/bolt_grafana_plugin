@@ -70,11 +70,13 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       if (response.status === 200) {
         return Utils.mapToTextValue(response);
       } else {
-        return {
-          status: 'error',
-          message: 'Error',
-          title: 'Error',
-        };
+        return Promise.reject([
+          {
+            status: 'error',
+            message: 'Error',
+            title: 'Error',
+          },
+        ]);
       }
     });
   }
@@ -85,7 +87,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         const collection = _.keys(this.facets).includes(query.queryType) ? this.anCollection : query.collection;
         const q = query.query;
         if (!q) {
-          return;
+          return Promise.resolve([]);
         }
 
         const numRows = ['single', 'facet'].includes(query.queryType) ? 0 : query.numRows;
@@ -125,11 +127,13 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           if (response.status === 200) {
             return Utils.processResponse(response, query.queryType, this.timestampField);
           } else {
-            return {
-              status: 'error',
-              message: 'Error',
-              title: 'Error',
-            };
+            return Promise.reject([
+              {
+                status: 'error',
+                message: 'Error',
+                title: 'Error',
+              },
+            ]);
           }
         });
       })
