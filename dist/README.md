@@ -1,7 +1,6 @@
-# Simple React Panel
+# Bolt Grafana plugin
 
-This is just a stub to show how to create a basic visualization plugin
-
+The plugin fetches data from Bolt database and provide it to Grafana charts. The plugin also supports dashboard variables.
 
 To work with this plugin run:
 ```
@@ -14,7 +13,6 @@ yarn watch
 ```
 
 This will run linting tools and apply prettier fix.
-
 
 To build the plugin run:
 ```

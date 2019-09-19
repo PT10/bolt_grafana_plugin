@@ -333,6 +333,23 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var datasourceUtils__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! datasourceUtils */ "./datasourceUtils.ts");
 /* harmony import */ var lodash__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! lodash */ "lodash");
 /* harmony import */ var lodash__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(lodash__WEBPACK_IMPORTED_MODULE_4__);
+/*
+ *
+ *  Copyright (C) 2019 Bolt Analytics Corporation
+ *
+ *      Licensed under the Apache License, Version 2.0 (the "License");
+ *      you may not use this file except in compliance with the License.
+ *      You may obtain a copy of the License at
+ *
+ *          http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *      Unless required by applicable law or agreed to in writing, software
+ *      distributed under the License is distributed on an "AS IS" BASIS,
+ *      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *      See the License for the specific language governing permissions and
+ *      limitations under the License.
+ *
+ */
 
 
 
@@ -381,18 +398,19 @@ function (_super) {
       return Promise.resolve([]);
     }
 
-    var pattern1 = /^(.*)\((.*)\)$/;
-    var pattern2 = /^getPageCount$/;
-    var matches = query.match(pattern1);
+    var pattern1 = /^getPageCount\(\$(.*),\s*\$(.*)\)$/;
+    var pattern2 = /^(.*)\((.*)\)$/;
+    var matches1 = query.match(pattern1);
+    var matches2 = query.match(pattern2);
 
-    if (matches && matches.length === 3) {
-      return this.getFields(matches);
-    } else if (query.match(pattern2)) {
-      return this.getTotalCount();
+    if (matches1 && matches1.length === 3) {
+      return this.getTotalCount(matches1);
+    } else if (matches2 && matches2.length === 3) {
+      return this.getFields(matches2);
     } else {
       return Promise.reject({
         status: 'error',
-        message: 'Supported options are: <collection_name>(<field_name>) and getPageCount',
+        message: 'Supported options are: <collection_name>(<field_name>) and getPageCount($PageSize, $Search)',
         title: 'Error while adding the variable'
       });
     }
@@ -516,12 +534,32 @@ function (_super) {
     });
   };
 
-  BoltDatasource.prototype.getTotalCount = function () {
-    var _this = this;
-
-    var searchQuery = lodash__WEBPACK_IMPORTED_MODULE_4___default()(this.templateSrv.variables).find(function (v) {
-      return v.name === 'Search';
+  BoltDatasource.prototype.getTotalCount = function (matches) {
+    var pageSizeVar = matches[1];
+    var searchVar = matches[2];
+    var searchQuery = this.templateSrv.variables.find(function (v) {
+      return v.name === searchVar;
     });
+
+    if (!searchQuery) {
+      return Promise.reject({
+        status: 'error',
+        message: '$' + searchVar + ' not found in variables',
+        title: 'Error while adding the variable'
+      });
+    }
+
+    var pageSize = this.templateSrv.variables.find(function (v) {
+      return v.name === pageSizeVar;
+    });
+
+    if (!pageSize) {
+      return Promise.reject({
+        status: 'error',
+        message: '$' + pageSizeVar + ' not found in variables',
+        title: 'Error while adding the variable'
+      });
+    }
 
     var url = this.baseUrl + '/' + this.rawCollection + '/select?q=' + searchQuery.query + '&rows=0' + '&fq=timestamp:[' + this.templateSrv.timeRange.from.toJSON() + ' TO ' + this.templateSrv.timeRange.to.toJSON() + ']';
     var options = {
@@ -529,10 +567,6 @@ function (_super) {
       method: 'GET'
     };
     return this.backendSrv.datasourceRequest(options).then(function (data) {
-      var pageSize = lodash__WEBPACK_IMPORTED_MODULE_4___default()(_this.templateSrv.variables).find(function (v) {
-        return v.name === 'PageSize';
-      });
-
       var arr = [];
 
       for (var i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
@@ -577,6 +611,23 @@ function (_super) {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Utils", function() { return Utils; });
+/*
+ *
+ *  Copyright (C) 2019 Bolt Analytics Corporation
+ *
+ *      Licensed under the Apache License, Version 2.0 (the "License");
+ *      you may not use this file except in compliance with the License.
+ *      You may obtain a copy of the License at
+ *
+ *          http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *      Unless required by applicable law or agreed to in writing, software
+ *      distributed under the License is distributed on an "AS IS" BASIS,
+ *      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *      See the License for the specific language governing permissions and
+ *      limitations under the License.
+ *
+ */
 var Utils =
 /** @class */
 function () {
@@ -817,6 +868,23 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_grafana_ui__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _datasource__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./datasource */ "./datasource.ts");
 /* harmony import */ var _queryEditor__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./queryEditor */ "./queryEditor.tsx");
+/*
+ *
+ *  Copyright (C) 2019 Bolt Analytics Corporation
+ *
+ *      Licensed under the Apache License, Version 2.0 (the "License");
+ *      you may not use this file except in compliance with the License.
+ *      You may obtain a copy of the License at
+ *
+ *          http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *      Unless required by applicable law or agreed to in writing, software
+ *      distributed under the License is distributed on an "AS IS" BASIS,
+ *      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *      See the License for the specific language governing permissions and
+ *      limitations under the License.
+ *
+ */
 
 
 
@@ -850,6 +918,23 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
 /* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @grafana/ui */ "@grafana/ui");
 /* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__);
+/*
+ *
+ *  Copyright (C) 2019 Bolt Analytics Corporation
+ *
+ *      Licensed under the Apache License, Version 2.0 (the "License");
+ *      you may not use this file except in compliance with the License.
+ *      You may obtain a copy of the License at
+ *
+ *          http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *      Unless required by applicable law or agreed to in writing, software
+ *      distributed under the License is distributed on an "AS IS" BASIS,
+ *      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *      See the License for the specific language governing permissions and
+ *      limitations under the License.
+ *
+ */
 
 
 

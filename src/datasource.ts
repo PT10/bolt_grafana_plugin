@@ -1,3 +1,21 @@
+/*
+ *
+ *  Copyright (C) 2019 Bolt Analytics Corporation
+ *
+ *      Licensed under the Apache License, Version 2.0 (the "License");
+ *      you may not use this file except in compliance with the License.
+ *      You may obtain a copy of the License at
+ *
+ *          http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *      Unless required by applicable law or agreed to in writing, software
+ *      distributed under the License is distributed on an "AS IS" BASIS,
+ *      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *      See the License for the specific language governing permissions and
+ *      limitations under the License.
+ *
+ */
+
 import { DataQueryRequest, DataSourceApi, DataSourceInstanceSettings } from '@grafana/ui';
 import { DataFrame } from '@grafana/data';
 import { BoltQuery, BoltOptions } from './types';
@@ -56,19 +74,20 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       return Promise.resolve([]);
     }
 
-    const pattern1 = /^(.*)\((.*)\)$/;
-    const pattern2 = /^getPageCount$/;
+    const pattern1 = /^getPageCount\(\$(.*),\s*\$(.*)\)$/;
+    const pattern2 = /^(.*)\((.*)\)$/;
 
-    const matches: any = query.match(pattern1);
+    const matches1: any = query.match(pattern1);
+    const matches2: any = query.match(pattern2);
 
-    if (matches && matches.length === 3) {
-      return this.getFields(matches);
-    } else if (query.match(pattern2)) {
-      return this.getTotalCount();
+    if (matches1 && matches1.length === 3) {
+      return this.getTotalCount(matches1);
+    } else if (matches2 && matches2.length === 3) {
+      return this.getFields(matches2);
     } else {
       return Promise.reject({
         status: 'error',
-        message: 'Supported options are: <collection_name>(<field_name>) and getPageCount',
+        message: 'Supported options are: <collection_name>(<field_name>) and getPageCount($PageSize, $Search)',
         title: 'Error while adding the variable',
       });
     }
@@ -202,8 +221,28 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     });
   }
 
-  getTotalCount() {
-    const searchQuery = _(this.templateSrv.variables).find(v => v.name === 'Search');
+  getTotalCount(matches: any) {
+    const pageSizeVar = matches[1];
+    const searchVar = matches[2];
+
+    const searchQuery = this.templateSrv.variables.find((v: any) => v.name === searchVar);
+    if (!searchQuery) {
+      return Promise.reject({
+        status: 'error',
+        message: '$' + searchVar + ' not found in variables',
+        title: 'Error while adding the variable',
+      });
+    }
+
+    const pageSize = this.templateSrv.variables.find((v: any) => v.name === pageSizeVar);
+    if (!pageSize) {
+      return Promise.reject({
+        status: 'error',
+        message: '$' + pageSizeVar + ' not found in variables',
+        title: 'Error while adding the variable',
+      });
+    }
+
     const url =
       this.baseUrl +
       '/' +
@@ -223,8 +262,6 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     };
 
     return this.backendSrv.datasourceRequest(options).then((data: any) => {
-      const pageSize = _(this.templateSrv.variables).find(v => v.name === 'PageSize');
-
       let arr: any[] = [];
       for (let i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
         arr.push(i);
