@@ -137,19 +137,30 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           params: solrQuery,
         };
 
-        return this.backendSrv.datasourceRequest(params).then((response: any) => {
-          if (response.status === 200) {
-            return Utils.processResponse(response, query.queryType, this.timestampField);
-          } else {
+        return this.backendSrv
+          .datasourceRequest(params)
+          .then((response: any) => {
+            if (response.status === 200) {
+              return Utils.processResponse(response, query.queryType, this.timestampField);
+            } else {
+              return Promise.reject([
+                {
+                  status: 'error',
+                  message: 'Error',
+                  title: 'Error',
+                },
+              ]);
+            }
+          })
+          .catch((error: any) => {
             return Promise.reject([
               {
                 status: 'error',
-                message: 'Error',
-                title: 'Error',
+                message: error.status + ': ' + error.statusText,
+                title: 'Error while accessing data',
               },
             ]);
-          }
-        });
+          });
       })
       .values();
 
@@ -168,7 +179,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
   testDatasource() {
     const options = {
-      url: this.baseUrl,
+      url: this.baseUrl + '/' + this.anCollection + '/select?wt=json',
       method: 'GET',
     };
     return this.backendSrv
@@ -190,9 +201,9 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       })
       .catch((error: any) => {
         return {
-          status: 'success',
-          message: 'Data source is working',
-          title: 'Success',
+          status: 'error',
+          message: error.status + ': ' + error.statusText,
+          title: 'Error',
         };
       });
   }

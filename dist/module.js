@@ -472,6 +472,12 @@ function (_super) {
             title: 'Error'
           }]);
         }
+      })["catch"](function (error) {
+        return Promise.reject([{
+          status: 'error',
+          message: error.status + ': ' + error.statusText,
+          title: 'Error while accessing data'
+        }]);
       });
     }).values();
     return Promise.all(targetPromises).then(function (responses) {
@@ -487,7 +493,7 @@ function (_super) {
 
   BoltDatasource.prototype.testDatasource = function () {
     var options = {
-      url: this.baseUrl,
+      url: this.baseUrl + '/' + this.anCollection + '/select?wt=json',
       method: 'GET'
     };
     return this.backendSrv.datasourceRequest(options).then(function (response) {
@@ -506,9 +512,9 @@ function (_super) {
       }
     })["catch"](function (error) {
       return {
-        status: 'success',
-        message: 'Data source is working',
-        title: 'Success'
+        status: 'error',
+        message: error.status + ': ' + error.statusText,
+        title: 'Error'
       };
     });
   };
