@@ -440,7 +440,9 @@ function (_super) {
         fl: _this.timestampField + (query.fl ? ',' + query.fl : ''),
         rows: +numRows,
         start: start,
-        getRawMessages: query.queryType === 'table' ? true : false
+        getRawMessages: query.queryType === 'table' || query.queryType === 'single' ? true : false,
+        startTime: startTime,
+        endTime: endTime
       };
 
       if (query.sortField) {
@@ -462,23 +464,7 @@ function (_super) {
         method: 'GET',
         params: solrQuery
       };
-      return _this.backendSrv.datasourceRequest(params).then(function (response) {
-        if (response.status === 200) {
-          return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField);
-        } else {
-          return Promise.reject([{
-            status: 'error',
-            message: 'Error',
-            title: 'Error'
-          }]);
-        }
-      })["catch"](function (error) {
-        return Promise.reject([{
-          status: 'error',
-          message: error.status + ': ' + error.statusText,
-          title: 'Error while accessing data'
-        }]);
-      });
+      return _this.sendQueryRequest(params, query);
     }).values();
     return Promise.all(targetPromises).then(function (responses) {
       var result = {
@@ -516,6 +502,28 @@ function (_super) {
         message: error.status + ': ' + error.statusText,
         title: 'Error'
       };
+    });
+  };
+
+  BoltDatasource.prototype.sendQueryRequest = function (params, query, cookie) {
+    var _this = this;
+
+    return this.backendSrv.datasourceRequest(params).then(function (response) {
+      if (response.status === 200) {
+        return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField);
+      } else {
+        return Promise.reject([{
+          status: 'error',
+          message: 'Error',
+          title: 'Error'
+        }]);
+      }
+    })["catch"](function (error) {
+      return Promise.reject([{
+        status: 'error',
+        message: error.status + ': ' + error.statusText,
+        title: 'Error while accessing data'
+      }]);
     });
   };
 
@@ -567,7 +575,7 @@ function (_super) {
       });
     }
 
-    var url = this.baseUrl + '/' + this.rawCollection + '/select?q=' + searchQuery.query + '&rows=0' + '&fq=timestamp:[' + this.templateSrv.timeRange.from.toJSON() + ' TO ' + this.templateSrv.timeRange.to.toJSON() + ']';
+    var url = this.baseUrl + '/' + this.rawCollection + '/select?q=' + searchQuery.query + '&rows=0' + '&fq=timestamp:[' + this.templateSrv.timeRange.from.toJSON() + ' TO ' + this.templateSrv.timeRange.to.toJSON() + ']' + '&getRawMessages=true' + '&startTime=' + this.templateSrv.timeRange.from.toJSON() + '&endTime=' + this.templateSrv.timeRange.to.toJSON();
     var options = {
       url: url,
       method: 'GET'
@@ -575,8 +583,10 @@ function (_super) {
     return this.backendSrv.datasourceRequest(options).then(function (data) {
       var arr = [];
 
-      for (var i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
-        arr.push(i);
+      if (data && data.data && data.data.response) {
+        for (var i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
+          arr.push(i);
+        }
       }
 
       arr = arr.map(function (ele) {
@@ -729,39 +739,43 @@ function () {
       var rows_1 = [];
       seriesList = {};
       var index_1 = 0;
-      data.response.docs.forEach(function (item) {
-        var row = [];
 
-        for (var property in item) {
-          // Set columns
-          if (index_1 === 0 && item.hasOwnProperty(property)) {
+      if (data && data.response && data.response.docs) {
+        data.response.docs.forEach(function (item) {
+          var row = [];
+
+          for (var property in item) {
+            // Set columns
+            if (index_1 === 0 && item.hasOwnProperty(property)) {
+              if (property === timeField) {
+                columns_1.push({
+                  type: 'time',
+                  text: 'Time'
+                });
+              } else {
+                columns_1.push({
+                  type: 'string',
+                  text: property
+                });
+              }
+            } // Set rows
+
+
             if (property === timeField) {
-              columns_1.push({
-                type: 'time',
-                text: 'Time'
-              });
+              var d = new Date(item[timeField]);
+              var ts = d.getTime(); //.unix() * 1000;
+
+              row.push(ts);
             } else {
-              columns_1.push({
-                type: 'string',
-                text: property
-              });
+              row.push(item[property]);
             }
-          } // Set rows
-
-
-          if (property === timeField) {
-            var d = new Date(item[timeField]);
-            var ts = d.getTime(); //.unix() * 1000;
-
-            row.push(ts);
-          } else {
-            row.push(item[property]);
           }
-        }
 
-        index_1++;
-        rows_1.push(row);
-      });
+          index_1++;
+          rows_1.push(row);
+        });
+      }
+
       seriesList = [{
         type: 'table',
         columns: columns_1,
@@ -769,9 +783,10 @@ function () {
       }];
     } else if (format === 'single') {
       seriesList = [];
+      var numResults = data && data.response && data.response.numFound ? data.response.numFound : 0;
       seriesList.push({
         target: 'Number of docs',
-        datapoints: [[data.response.numFound, '']]
+        datapoints: [[numResults, '']]
       });
     } else if (format === 'chart') {
       // Charts
@@ -809,7 +824,7 @@ function () {
   };
 
   Utils.mapToTextValue = function (result) {
-    if (result.data.collections) {
+    if (result.data && result.data.collections) {
       return result.data.collections.map(function (collection) {
         return {
           text: collection,
@@ -818,7 +833,7 @@ function () {
       });
     }
 
-    if (result.data.facet_counts) {
+    if (result.data && result.data.facet_counts) {
       var ar = [];
 
       for (var key in result.data.facet_counts.facet_fields) {

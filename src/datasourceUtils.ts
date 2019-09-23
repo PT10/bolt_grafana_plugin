@@ -107,30 +107,32 @@ export class Utils {
       const rows: any[] = [];
       seriesList = {};
       let index = 0;
-      data.response.docs.forEach((item: any) => {
-        const row = [];
-        for (const property in item) {
-          // Set columns
-          if (index === 0 && item.hasOwnProperty(property)) {
+      if (data && data.response && data.response.docs) {
+        data.response.docs.forEach((item: any) => {
+          const row = [];
+          for (const property in item) {
+            // Set columns
+            if (index === 0 && item.hasOwnProperty(property)) {
+              if (property === timeField) {
+                columns.push({ type: 'time', text: 'Time' });
+              } else {
+                columns.push({ type: 'string', text: property });
+              }
+            }
+            // Set rows
             if (property === timeField) {
-              columns.push({ type: 'time', text: 'Time' });
+              const d: Date = new Date(item[timeField]);
+
+              const ts = d.getTime(); //.unix() * 1000;
+              row.push(ts);
             } else {
-              columns.push({ type: 'string', text: property });
+              row.push(item[property]);
             }
           }
-          // Set rows
-          if (property === timeField) {
-            const d: Date = new Date(item[timeField]);
-
-            const ts = d.getTime(); //.unix() * 1000;
-            row.push(ts);
-          } else {
-            row.push(item[property]);
-          }
-        }
-        index++;
-        rows.push(row);
-      });
+          index++;
+          rows.push(row);
+        });
+      }
       seriesList = [
         {
           type: 'table',
@@ -140,9 +142,10 @@ export class Utils {
       ];
     } else if (format === 'single') {
       seriesList = [];
+      const numResults = data && data.response && data.response.numFound ? data.response.numFound : 0;
       seriesList.push({
         target: 'Number of docs',
-        datapoints: [[data.response.numFound, '']],
+        datapoints: [[numResults, '']],
       });
     } else if (format === 'chart') {
       // Charts
@@ -177,7 +180,7 @@ export class Utils {
   }
 
   static mapToTextValue(result: any) {
-    if (result.data.collections) {
+    if (result.data && result.data.collections) {
       return result.data.collections.map((collection: string) => {
         return {
           text: collection,
@@ -185,7 +188,7 @@ export class Utils {
         };
       });
     }
-    if (result.data.facet_counts) {
+    if (result.data && result.data.facet_counts) {
       const ar = [];
       for (const key in result.data.facet_counts.facet_fields) {
         if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {

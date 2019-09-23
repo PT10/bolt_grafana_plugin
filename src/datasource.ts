@@ -114,7 +114,9 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           fl: this.timestampField + (query.fl ? ',' + query.fl : ''),
           rows: +numRows,
           start: start,
-          getRawMessages: query.queryType === 'table' ? true : false,
+          getRawMessages: query.queryType === 'table' || query.queryType === 'single' ? true : false,
+          startTime: startTime,
+          endTime: endTime,
         };
 
         if (query.sortField) {
@@ -137,30 +139,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           params: solrQuery,
         };
 
-        return this.backendSrv
-          .datasourceRequest(params)
-          .then((response: any) => {
-            if (response.status === 200) {
-              return Utils.processResponse(response, query.queryType, this.timestampField);
-            } else {
-              return Promise.reject([
-                {
-                  status: 'error',
-                  message: 'Error',
-                  title: 'Error',
-                },
-              ]);
-            }
-          })
-          .catch((error: any) => {
-            return Promise.reject([
-              {
-                status: 'error',
-                message: error.status + ': ' + error.statusText,
-                title: 'Error while accessing data',
-              },
-            ]);
-          });
+        return this.sendQueryRequest(params, query);
       })
       .values();
 
@@ -205,6 +184,33 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           message: error.status + ': ' + error.statusText,
           title: 'Error',
         };
+      });
+  }
+
+  sendQueryRequest(params: any, query: BoltQuery, cookie?: any) {
+    return this.backendSrv
+      .datasourceRequest(params)
+      .then((response: any) => {
+        if (response.status === 200) {
+          return Utils.processResponse(response, query.queryType, this.timestampField);
+        } else {
+          return Promise.reject([
+            {
+              status: 'error',
+              message: 'Error',
+              title: 'Error',
+            },
+          ]);
+        }
+      })
+      .catch((error: any) => {
+        return Promise.reject([
+          {
+            status: 'error',
+            message: error.status + ': ' + error.statusText,
+            title: 'Error while accessing data',
+          },
+        ]);
       });
   }
 
@@ -265,7 +271,12 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       this.templateSrv.timeRange.from.toJSON() +
       ' TO ' +
       this.templateSrv.timeRange.to.toJSON() +
-      ']';
+      ']' +
+      '&getRawMessages=true' +
+      '&startTime=' +
+      this.templateSrv.timeRange.from.toJSON() +
+      '&endTime=' +
+      this.templateSrv.timeRange.to.toJSON();
 
     const options = {
       url: url,
@@ -274,8 +285,10 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
     return this.backendSrv.datasourceRequest(options).then((data: any) => {
       let arr: any[] = [];
-      for (let i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
-        arr.push(i);
+      if (data && data.data && data.data.response) {
+        for (let i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
+          arr.push(i);
+        }
       }
       arr = arr.map(ele => {
         return {
