@@ -368,7 +368,9 @@ function (_super) {
     _this.baseUrl = '';
     _this.anCollection = '';
     _this.rawCollection = '';
+    _this.rawCollectionType = 'single';
     _this.timestampField = 'timestamp';
+    _this.rawCollectionWindow = 1;
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
       indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"}}}}}}}}'
@@ -387,6 +389,8 @@ function (_super) {
       _this.anCollection = instanceSettings.jsonData.anCollection;
       _this.rawCollection = instanceSettings.jsonData.rawCollection;
       _this.timestampField = instanceSettings.jsonData.timestampField;
+      _this.rawCollectionType = instanceSettings.jsonData.rawCollectionType;
+      _this.rawCollectionWindow = instanceSettings.jsonData.rawCollectionWindow;
     }
 
     _this.backendSrv = Object(_grafana_runtime__WEBPACK_IMPORTED_MODULE_2__["getBackendSrv"])();
@@ -431,32 +435,49 @@ function (_super) {
       var start = _this.templateSrv.replace(query.start, options.scopedVars);
 
       var numRows = _this.templateSrv.replace(query.numRows.toString(), options.scopedVars) || 100;
-      numRows = ['single', 'facet'].includes(query.queryType) ? 0 : numRows;
+
+      if (query.queryType === 'chart') {
+        numRows = 1000; // Cursor page size
+      } else {
+        numRows = ['count', 'facet'].includes(query.queryType) ? 0 : numRows;
+      }
+
       var startTime = options.range.from.toISOString();
-      var endTime = options.range.to.toISOString();
+      var endTime = options.range.to.toISOString(); // Add basic query fields
+
       var solrQuery = {
         fq: _this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
         q: q,
         fl: _this.timestampField + (query.fl ? ',' + query.fl : ''),
         rows: +numRows,
         start: start,
-        getRawMessages: query.queryType === 'table' || query.queryType === 'single' ? true : false,
-        startTime: startTime,
-        endTime: endTime
-      };
+        getRawMessages: query.queryType === 'rawlogs' || query.queryType === 'count' ? true : false
+      }; // Add fields specific to raw logs and single stat on raw logs
 
-      if (query.sortField) {
-        solrQuery['sort'] = query.sortField + ' ' + query.sortOrder;
-      } else if (query.queryType === 'chart') {
-        solrQuery['sort'] = 'timestamp asc';
-      }
+      if (query.queryType === 'rawlogs' || query.queryType === 'count') {
+        solrQuery['collectionWindow'] = _this.rawCollectionWindow;
+        solrQuery['startTime'] = startTime;
+        solrQuery['endTime'] = endTime;
+      } // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)
+      // TODO: Find out why numFounf is returned only after specifying the facet
 
-      if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
+
+      if (query.queryType === 'count' && _this.rawCollectionType === 'multi') {
+        solrQuery['facet'] = true;
+        solrQuery['facet.field'] = 'id';
+      } else if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
         solrQuery['facet'] = true;
         solrQuery['json.facet'] = _this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime);
       } else {
         delete solrQuery['facet'];
         delete solrQuery['json.facet'];
+      } // for cursor to work. Will sort by ts later
+
+
+      if (query.queryType === 'chart') {
+        solrQuery['sort'] = 'id asc';
+      } else if (query.sortField) {
+        solrQuery['sort'] = _this.templateSrv.replace(query.sortField, options.scopedVars) + ' ' + _this.templateSrv.replace(query.sortOrder, options.scopedVars);
       }
 
       var params = {
@@ -464,15 +485,43 @@ function (_super) {
         method: 'GET',
         params: solrQuery
       };
-      return _this.sendQueryRequest(params, query);
+      var cursor = query.queryType === 'chart' ? '*' : null;
+      return _this.sendQueryRequest([], params, query, cursor); // cursor mark or charts
     }).values();
+    var series = {};
+    var resultSeries = [];
     return Promise.all(targetPromises).then(function (responses) {
-      var result = {
-        data: responses.map(function (response) {
-          return response.data;
-        })
+      responses.forEach(function (resp) {
+        resp.forEach(function (r) {
+          r.data.forEach(function (s) {
+            if (s.type === 'table') {
+              resultSeries.push(s);
+            } else {
+              series[s.target] = !series[s.target] ? s.datapoints : series[s.target].concat(s.datapoints);
+            }
+          });
+        });
+      });
+      /*
+      const result = {
+        data: responses.map(response => {
+          return response
+        }),
       };
-      result.data = lodash__WEBPACK_IMPORTED_MODULE_4___default.a.flatten(result.data);
+             result.data = _.flatten(result.data);*/
+
+      lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(series).forEach(function (key) {
+        resultSeries.push({
+          target: key,
+          datapoints: series[key].sort(function (a, b) {
+            return a[1] - b[1];
+          })
+        });
+      });
+
+      var result = {
+        data: resultSeries
+      };
       return result;
     });
   };
@@ -505,12 +554,23 @@ function (_super) {
     });
   };
 
-  BoltDatasource.prototype.sendQueryRequest = function (params, query, cookie) {
+  BoltDatasource.prototype.sendQueryRequest = function (respArr, params, query, cursor) {
     var _this = this;
+
+    if (cursor) {
+      params.params['cursorMark'] = cursor;
+    }
 
     return this.backendSrv.datasourceRequest(params).then(function (response) {
       if (response.status === 200) {
-        return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField);
+        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField);
+        respArr.push(processedData);
+
+        if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
+          return _this.sendQueryRequest(respArr, params, query, response.data.nextCursorMark);
+        } else {
+          return respArr;
+        }
       } else {
         return Promise.reject([{
           status: 'error',
@@ -575,10 +635,20 @@ function (_super) {
       });
     }
 
-    var url = this.baseUrl + '/' + this.rawCollection + '/select?q=' + searchQuery.query + '&rows=0' + '&fq=timestamp:[' + this.templateSrv.timeRange.from.toJSON() + ' TO ' + this.templateSrv.timeRange.to.toJSON() + ']' + '&getRawMessages=true' + '&startTime=' + this.templateSrv.timeRange.from.toJSON() + '&endTime=' + this.templateSrv.timeRange.to.toJSON();
+    var params = {
+      q: searchQuery.query,
+      rows: 0,
+      fq: 'timestamp:[' + this.templateSrv.timeRange.from.toJSON() + ' TO ' + this.templateSrv.timeRange.to.toJSON() + ']',
+      getRawMessages: true,
+      startTime: this.templateSrv.timeRange.from.toJSON(),
+      endTime: this.templateSrv.timeRange.to.toJSON(),
+      facet: true,
+      'facet.field': 'id'
+    };
     var options = {
-      url: url,
-      method: 'GET'
+      url: this.baseUrl + '/' + this.rawCollection + '/select?wt=josn',
+      method: 'GET',
+      params: params
     };
     return this.backendSrv.datasourceRequest(options).then(function (data) {
       var arr = [];
@@ -700,6 +770,7 @@ function () {
         });
       });
     } else if (data.facets && data.facets.heatMapFacet) {
+      // Heatmap
       seriesList = [];
       var jobs = data.facets.heatMapFacet.buckets;
       jobs.forEach(function (job) {
@@ -733,7 +804,7 @@ function () {
 
         return totalA - totalB;
       });
-    } else if (format === 'table') {
+    } else if (format === 'rawlogs') {
       // Table
       var columns_1 = [];
       var rows_1 = [];
@@ -748,7 +819,7 @@ function () {
             // Set columns
             if (index_1 === 0 && item.hasOwnProperty(property)) {
               if (property === timeField) {
-                columns_1.push({
+                columns_1.unshift({
                   type: 'time',
                   text: 'Time'
                 });
@@ -765,7 +836,7 @@ function () {
               var d = new Date(item[timeField]);
               var ts = d.getTime(); //.unix() * 1000;
 
-              row.push(ts);
+              row.unshift(ts);
             } else {
               row.push(item[property]);
             }
@@ -781,7 +852,7 @@ function () {
         columns: columns_1,
         rows: rows_1
       }];
-    } else if (format === 'single') {
+    } else if (format === 'count') {
       seriesList = [];
       var numResults = data && data.response && data.response.numFound ? data.response.numFound : 0;
       seriesList.push({
@@ -794,7 +865,6 @@ function () {
       data.response.docs.forEach(function (item) {
         for (var property in item) {
           if (item.hasOwnProperty(property) && property !== timeField) {
-            // do stuff
             if (typeof series[property] === 'undefined') {
               series[property] = [];
             }
@@ -809,7 +879,9 @@ function () {
       for (var property in series) {
         seriesList.push({
           target: property,
-          datapoints: series[property].reverse()
+          datapoints: series[property].sort(function (a, b) {
+            return a[1] - b[1];
+          })
         });
       }
     }
@@ -1005,11 +1077,11 @@ function (_super) {
       value: 'chart',
       displayName: 'Chart'
     }, {
-      value: 'table',
-      displayName: 'Table'
+      value: 'rawlogs',
+      displayName: 'Raw Logs'
     }, {
-      value: 'single',
-      displayName: 'Single'
+      value: 'count',
+      displayName: 'Count'
     }, {
       displayName: 'Aggregated Anomalies',
       value: 'aggAnomaly'
@@ -1063,9 +1135,9 @@ function (_super) {
       width: 4,
       name: "collection",
       onChange: this.onFieldValueChange
-    }))), (queryType === 'chart' || queryType === 'table') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }))), (queryType === 'chart' || queryType === 'rawlogs') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
-    }, queryType === 'table' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }, queryType === 'rawlogs' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Sort",
@@ -1077,19 +1149,15 @@ function (_super) {
       onChange: this.onFieldValueChange
     })), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormLabel"], {
-      width: labelWidth
-    }, "Order"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
-      onChange: function onChange(event) {
-        return _this.onFieldValueChange(event, 'sortOrder');
-      }
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
-      value: "asc",
-      selected: sortOrder === 'asc'
-    }, "Ascending"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
-      value: "desc",
-      selected: sortOrder === 'desc'
-    }, "Descending")))), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+      label: "Order",
+      type: "text",
+      value: sortOrder,
+      labelWidth: labelWidth,
+      width: 4,
+      name: "sortOrder",
+      onChange: this.onFieldValueChange
+    }))), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Out Fields",
@@ -1099,7 +1167,7 @@ function (_super) {
       width: 4,
       name: "fl",
       onChange: this.onFieldValueChange
-    })), (queryType === 'table' || queryType === 'chart') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), queryType === 'rawlogs' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Number of rows",
@@ -1109,7 +1177,7 @@ function (_super) {
       width: 6,
       name: "numRows",
       onChange: this.onFieldValueChange
-    })), queryType === 'table' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), queryType === 'rawlogs' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Start page",

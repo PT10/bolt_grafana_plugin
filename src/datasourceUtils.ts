@@ -68,6 +68,7 @@ export class Utils {
         });
       });
     } else if (data.facets && data.facets.heatMapFacet) {
+      // Heatmap
       seriesList = [];
       const jobs = data.facets.heatMapFacet.buckets;
       jobs.forEach((job: any) => {
@@ -101,7 +102,7 @@ export class Utils {
 
         return totalA - totalB;
       });
-    } else if (format === 'table') {
+    } else if (format === 'rawlogs') {
       // Table
       const columns: any[] = [];
       const rows: any[] = [];
@@ -114,7 +115,7 @@ export class Utils {
             // Set columns
             if (index === 0 && item.hasOwnProperty(property)) {
               if (property === timeField) {
-                columns.push({ type: 'time', text: 'Time' });
+                columns.unshift({ type: 'time', text: 'Time' });
               } else {
                 columns.push({ type: 'string', text: property });
               }
@@ -124,7 +125,7 @@ export class Utils {
               const d: Date = new Date(item[timeField]);
 
               const ts = d.getTime(); //.unix() * 1000;
-              row.push(ts);
+              row.unshift(ts);
             } else {
               row.push(item[property]);
             }
@@ -140,7 +141,7 @@ export class Utils {
           rows: rows,
         },
       ];
-    } else if (format === 'single') {
+    } else if (format === 'count') {
       seriesList = [];
       const numResults = data && data.response && data.response.numFound ? data.response.numFound : 0;
       seriesList.push({
@@ -153,7 +154,6 @@ export class Utils {
       data.response.docs.forEach((item: any) => {
         for (const property in item) {
           if (item.hasOwnProperty(property) && property !== timeField) {
-            // do stuff
             if (typeof series[property] === 'undefined') {
               series[property] = [];
             }
@@ -166,7 +166,9 @@ export class Utils {
       for (const property in series) {
         seriesList.push({
           target: property,
-          datapoints: series[property].reverse(),
+          datapoints: series[property].sort((a: any, b: any) => {
+            return a[1] - b[1];
+          }),
         });
       }
     }

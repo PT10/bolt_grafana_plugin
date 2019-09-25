@@ -78,8 +78,8 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
   render() {
     const chartTypes = [
       { value: 'chart', displayName: 'Chart' },
-      { value: 'table', displayName: 'Table' },
-      { value: 'single', displayName: 'Single' },
+      { value: 'rawlogs', displayName: 'Raw Logs' },
+      { value: 'count', displayName: 'Count' },
       {
         displayName: 'Aggregated Anomalies',
         value: 'aggAnomaly',
@@ -134,9 +134,9 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
             </div>
           )}
         </div>
-        {(queryType === 'chart' || queryType === 'table') && (
+        {(queryType === 'chart' || queryType === 'rawlogs') && (
           <div className="gf-form-inline">
-            {queryType === 'table' && (
+            {queryType === 'rawlogs' && (
               <div>
                 <div className="gf-form">
                   <FormField
@@ -150,15 +150,15 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
                   ></FormField>
                 </div>
                 <div className="gf-form">
-                  <FormLabel width={labelWidth}>Order</FormLabel>
-                  <select onChange={(event: any) => this.onFieldValueChange(event, 'sortOrder')}>
-                    <option value="asc" selected={sortOrder === 'asc'}>
-                      Ascending
-                    </option>
-                    <option value="desc" selected={sortOrder === 'desc'}>
-                      Descending
-                    </option>
-                  </select>
+                  <FormField
+                    label="Order"
+                    type="text"
+                    value={sortOrder}
+                    labelWidth={labelWidth}
+                    width={4}
+                    name="sortOrder"
+                    onChange={this.onFieldValueChange}
+                  ></FormField>
                 </div>
               </div>
             )}
@@ -174,7 +174,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
                 onChange={this.onFieldValueChange}
               ></FormField>
             </div>
-            {(queryType === 'table' || queryType === 'chart') && (
+            {queryType === 'rawlogs' && (
               <div className="gf-form">
                 <FormField
                   label="Number of rows"
@@ -187,7 +187,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
                 ></FormField>
               </div>
             )}
-            {queryType === 'table' && (
+            {queryType === 'rawlogs' && (
               <div className="gf-form">
                 <FormField
                   label="Start page"

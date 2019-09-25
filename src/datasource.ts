@@ -29,7 +29,9 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   baseUrl: any = '';
   anCollection = '';
   rawCollection = '';
+  rawCollectionType = 'single';
   timestampField = 'timestamp';
+  rawCollectionWindow = 1;
   backendSrv: any;
   qTemp: any;
   $q: any;
@@ -64,6 +66,8 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       this.anCollection = instanceSettings.jsonData.anCollection;
       this.rawCollection = instanceSettings.jsonData.rawCollection;
       this.timestampField = instanceSettings.jsonData.timestampField;
+      this.rawCollectionType = instanceSettings.jsonData.rawCollectionType;
+      this.rawCollectionWindow = instanceSettings.jsonData.rawCollectionWindow;
     }
 
     this.backendSrv = getBackendSrv();
@@ -104,33 +108,51 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         const start = this.templateSrv.replace(query.start, options.scopedVars);
         let numRows = this.templateSrv.replace(query.numRows.toString(), options.scopedVars) || 100;
 
-        numRows = ['single', 'facet'].includes(query.queryType) ? 0 : numRows;
+        if (query.queryType === 'chart') {
+          numRows = 1000; // Cursor page size
+        } else {
+          numRows = ['count', 'facet'].includes(query.queryType) ? 0 : numRows;
+        }
+
         const startTime = options.range.from.toISOString();
         const endTime = options.range.to.toISOString();
 
+        // Add basic query fields
         const solrQuery: any = {
           fq: this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
           q: q,
           fl: this.timestampField + (query.fl ? ',' + query.fl : ''),
           rows: +numRows,
           start: start,
-          getRawMessages: query.queryType === 'table' || query.queryType === 'single' ? true : false,
-          startTime: startTime,
-          endTime: endTime,
+          getRawMessages: query.queryType === 'rawlogs' || query.queryType === 'count' ? true : false,
         };
 
-        if (query.sortField) {
-          solrQuery['sort'] = query.sortField + ' ' + query.sortOrder;
-        } else if (query.queryType === 'chart') {
-          solrQuery['sort'] = 'timestamp asc';
+        // Add fields specific to raw logs and single stat on raw logs
+        if (query.queryType === 'rawlogs' || query.queryType === 'count') {
+          solrQuery['collectionWindow'] = this.rawCollectionWindow;
+          solrQuery['startTime'] = startTime;
+          solrQuery['endTime'] = endTime;
         }
 
-        if (_.keys(this.facets).includes(query.queryType)) {
+        // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)
+        // TODO: Find out why numFounf is returned only after specifying the facet
+        if (query.queryType === 'count' && this.rawCollectionType === 'multi') {
+          solrQuery['facet'] = true;
+          solrQuery['facet.field'] = 'id';
+        } else if (_.keys(this.facets).includes(query.queryType)) {
           solrQuery['facet'] = true;
           solrQuery['json.facet'] = this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime);
         } else {
           delete solrQuery['facet'];
           delete solrQuery['json.facet'];
+        }
+
+        // for cursor to work. Will sort by ts later
+        if (query.queryType === 'chart') {
+          solrQuery['sort'] = 'id asc';
+        } else if (query.sortField) {
+          solrQuery['sort'] =
+            this.templateSrv.replace(query.sortField, options.scopedVars) + ' ' + this.templateSrv.replace(query.sortOrder, options.scopedVars);
         }
 
         const params = {
@@ -139,18 +161,48 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           params: solrQuery,
         };
 
-        return this.sendQueryRequest(params, query);
+        const cursor = query.queryType === 'chart' ? '*' : null;
+
+        return this.sendQueryRequest([], params, query, cursor); // cursor mark or charts
       })
       .values();
 
+    const series: any = {};
+    const resultSeries: any[] = [];
+
     return Promise.all(targetPromises).then(responses => {
+      responses.forEach(resp => {
+        resp.forEach((r: any) => {
+          r.data.forEach((s: any) => {
+            if (s.type === 'table') {
+              resultSeries.push(s);
+            } else {
+              series[s.target] = !series[s.target] ? s.datapoints : series[s.target].concat(s.datapoints);
+            }
+          });
+        });
+      });
+      /*
       const result = {
         data: responses.map(response => {
-          return response.data;
+          return response
         }),
       };
 
-      result.data = _.flatten(result.data);
+      result.data = _.flatten(result.data);*/
+
+      _.keys(series).forEach(key => {
+        resultSeries.push({
+          target: key,
+          datapoints: series[key].sort((a: any, b: any) => {
+            return a[1] - b[1];
+          }),
+        });
+      });
+
+      const result = {
+        data: resultSeries,
+      };
 
       return result;
     });
@@ -187,12 +239,22 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       });
   }
 
-  sendQueryRequest(params: any, query: BoltQuery, cookie?: any) {
+  sendQueryRequest(respArr: any[], params: any, query: BoltQuery, cursor?: any) {
+    if (cursor) {
+      params.params['cursorMark'] = cursor;
+    }
     return this.backendSrv
       .datasourceRequest(params)
       .then((response: any) => {
         if (response.status === 200) {
-          return Utils.processResponse(response, query.queryType, this.timestampField);
+          const processedData = Utils.processResponse(response, query.queryType, this.timestampField);
+          respArr.push(processedData);
+
+          if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
+            return this.sendQueryRequest(respArr, params, query, response.data.nextCursorMark);
+          } else {
+            return respArr;
+          }
         } else {
           return Promise.reject([
             {
@@ -260,27 +322,21 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       });
     }
 
-    const url =
-      this.baseUrl +
-      '/' +
-      this.rawCollection +
-      '/select?q=' +
-      searchQuery.query +
-      '&rows=0' +
-      '&fq=timestamp:[' +
-      this.templateSrv.timeRange.from.toJSON() +
-      ' TO ' +
-      this.templateSrv.timeRange.to.toJSON() +
-      ']' +
-      '&getRawMessages=true' +
-      '&startTime=' +
-      this.templateSrv.timeRange.from.toJSON() +
-      '&endTime=' +
-      this.templateSrv.timeRange.to.toJSON();
+    const params = {
+      q: searchQuery.query,
+      rows: 0,
+      fq: 'timestamp:[' + this.templateSrv.timeRange.from.toJSON() + ' TO ' + this.templateSrv.timeRange.to.toJSON() + ']',
+      getRawMessages: true,
+      startTime: this.templateSrv.timeRange.from.toJSON(),
+      endTime: this.templateSrv.timeRange.to.toJSON(),
+      facet: true,
+      'facet.field': 'id',
+    };
 
     const options = {
-      url: url,
+      url: this.baseUrl + '/' + this.rawCollection + '/select?wt=josn',
       method: 'GET',
+      params: params,
     };
 
     return this.backendSrv.datasourceRequest(options).then((data: any) => {
