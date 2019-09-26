@@ -37,6 +37,8 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   $q: any;
   templateSrv: any;
 
+  totalCount?: number = undefined;
+
   facets: any = {
     aggAnomaly:
       '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' +
@@ -100,12 +102,26 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   query(options: DataQueryRequest<BoltQuery>): any {
     const targetPromises = options.targets
       .map((query: BoltQuery) => {
+        // If user has added page number variable the count is computed in template init (metricFindQuery) No need to fire the Query on solr again
+        if (query.queryType === 'count' && this.totalCount) {
+          return Promise.resolve([
+            {
+              data: [
+                {
+                  target: 'Number of docs',
+                  datapoints: [[this.totalCount, '']],
+                },
+              ],
+            },
+          ]);
+        }
+
         const collection = _.keys(this.facets).includes(query.queryType) ? this.anCollection : query.collection;
         if (!query.query) {
           return Promise.resolve([]);
         }
         const q = Utils.queryBuilder(this.templateSrv.replace(query.query, options.scopedVars));
-        const start = this.templateSrv.replace(query.start, options.scopedVars);
+        let start = this.templateSrv.replace(query.start, options.scopedVars);
         let numRows = this.templateSrv.replace(query.numRows.toString(), options.scopedVars) || 100;
 
         if (query.queryType === 'chart') {
@@ -117,12 +133,14 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         const startTime = options.range.from.toISOString();
         const endTime = options.range.to.toISOString();
 
+        numRows = Number(numRows);
+        start = numRows * Number(start);
         // Add basic query fields
         const solrQuery: any = {
           fq: this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
           q: q,
           fl: this.timestampField + (query.fl ? ',' + query.fl : ''),
-          rows: +numRows,
+          rows: numRows,
           start: start,
           getRawMessages: query.queryType === 'rawlogs' || query.queryType === 'count' ? true : false,
         };
@@ -139,6 +157,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         if (query.queryType === 'count' && this.rawCollectionType === 'multi') {
           solrQuery['facet'] = true;
           solrQuery['facet.field'] = 'id';
+          solrQuery['facet.limit'] = 2;
         } else if (_.keys(this.facets).includes(query.queryType)) {
           solrQuery['facet'] = true;
           solrQuery['json.facet'] = this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime);
@@ -306,6 +325,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
     const searchQuery = this.templateSrv.variables.find((v: any) => v.name === searchVar);
     if (!searchQuery) {
+      this.totalCount = undefined;
       return Promise.reject({
         status: 'error',
         message: '$' + searchVar + ' not found in variables',
@@ -315,6 +335,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
     const pageSize = this.templateSrv.variables.find((v: any) => v.name === pageSizeVar);
     if (!pageSize) {
+      this.totalCount = undefined;
       return Promise.reject({
         status: 'error',
         message: '$' + pageSizeVar + ' not found in variables',
@@ -331,6 +352,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       endTime: this.templateSrv.timeRange.to.toJSON(),
       facet: true,
       'facet.field': 'id',
+      'facet.limit': 2,
     };
 
     const options = {
@@ -341,6 +363,8 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
     return this.backendSrv.datasourceRequest(options).then((data: any) => {
       let arr: any[] = [];
+
+      this.totalCount = data.data.response.numFound;
       if (data && data.data && data.data.response) {
         for (let i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
           arr.push(i);

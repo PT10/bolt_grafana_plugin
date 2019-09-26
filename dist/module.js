@@ -371,6 +371,7 @@ function (_super) {
     _this.rawCollectionType = 'single';
     _this.timestampField = 'timestamp';
     _this.rawCollectionWindow = 1;
+    _this.totalCount = undefined;
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
       indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"}}}}}}}}'
@@ -424,6 +425,16 @@ function (_super) {
     var _this = this;
 
     var targetPromises = options.targets.map(function (query) {
+      // If user has added page number variable the count is computed in template init (metricFindQuery) No need to fire the Query on solr again
+      if (query.queryType === 'count' && _this.totalCount) {
+        return Promise.resolve([{
+          data: [{
+            target: 'Number of docs',
+            datapoints: [[_this.totalCount, '']]
+          }]
+        }]);
+      }
+
       var collection = lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType) ? _this.anCollection : query.collection;
 
       if (!query.query) {
@@ -443,13 +454,15 @@ function (_super) {
       }
 
       var startTime = options.range.from.toISOString();
-      var endTime = options.range.to.toISOString(); // Add basic query fields
+      var endTime = options.range.to.toISOString();
+      numRows = Number(numRows);
+      start = numRows * Number(start); // Add basic query fields
 
       var solrQuery = {
         fq: _this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
         q: q,
         fl: _this.timestampField + (query.fl ? ',' + query.fl : ''),
-        rows: +numRows,
+        rows: numRows,
         start: start,
         getRawMessages: query.queryType === 'rawlogs' || query.queryType === 'count' ? true : false
       }; // Add fields specific to raw logs and single stat on raw logs
@@ -465,6 +478,7 @@ function (_super) {
       if (query.queryType === 'count' && _this.rawCollectionType === 'multi') {
         solrQuery['facet'] = true;
         solrQuery['facet.field'] = 'id';
+        solrQuery['facet.limit'] = 2;
       } else if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
         solrQuery['facet'] = true;
         solrQuery['json.facet'] = _this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime);
@@ -609,6 +623,8 @@ function (_super) {
   };
 
   BoltDatasource.prototype.getTotalCount = function (matches) {
+    var _this = this;
+
     var pageSizeVar = matches[1];
     var searchVar = matches[2];
     var searchQuery = this.templateSrv.variables.find(function (v) {
@@ -616,6 +632,7 @@ function (_super) {
     });
 
     if (!searchQuery) {
+      this.totalCount = undefined;
       return Promise.reject({
         status: 'error',
         message: '$' + searchVar + ' not found in variables',
@@ -628,6 +645,7 @@ function (_super) {
     });
 
     if (!pageSize) {
+      this.totalCount = undefined;
       return Promise.reject({
         status: 'error',
         message: '$' + pageSizeVar + ' not found in variables',
@@ -643,7 +661,8 @@ function (_super) {
       startTime: this.templateSrv.timeRange.from.toJSON(),
       endTime: this.templateSrv.timeRange.to.toJSON(),
       facet: true,
-      'facet.field': 'id'
+      'facet.field': 'id',
+      'facet.limit': 2
     };
     var options = {
       url: this.baseUrl + '/' + this.rawCollection + '/select?wt=josn',
@@ -652,6 +671,7 @@ function (_super) {
     };
     return this.backendSrv.datasourceRequest(options).then(function (data) {
       var arr = [];
+      _this.totalCount = data.data.response.numFound;
 
       if (data && data.data && data.data.response) {
         for (var i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
