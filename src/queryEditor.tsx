@@ -50,6 +50,9 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       facetQuery: query.facetQuery,
       sortField: query.sortField,
       sortOrder: query.sortOrder,
+      rexQuery:
+        query.rexQuery || 's*.*s*[c:(.*)ss:(.*)sr:(.*)sx:(.*)]s*o.a.s.c.S.SlowRequest.*path=(.*)s*params={(.*)}s*.*hits=(.*)s*status.*QTime=(.*)',
+      rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
     };
 
     const { onChange } = this.props;
@@ -79,6 +82,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
     const chartTypes = [
       { value: 'chart', displayName: 'Chart' },
       { value: 'rawlogs', displayName: 'Raw Logs' },
+      { value: 'slowQueries', displayName: 'Slow Queries' },
       { value: 'count', displayName: 'Count' },
       {
         displayName: 'Aggregated Anomalies',
@@ -89,7 +93,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         value: 'indvAnomaly',
       },
     ];
-    const { query, collection, fl, queryType, numRows, start, sortField, sortOrder } = this.state;
+    const { query, collection, fl, queryType, numRows, start, sortField, sortOrder, rexQuery, rexOutFields } = this.state;
     const labelWidth = 8;
 
     return (
@@ -134,9 +138,9 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
             </div>
           )}
         </div>
-        {(queryType === 'chart' || queryType === 'rawlogs') && (
+        {(queryType === 'chart' || queryType === 'rawlogs' || queryType === 'slowQueries') && (
           <div className="gf-form-inline">
-            {queryType === 'rawlogs' && (
+            {(queryType === 'rawlogs' || queryType === 'slowQueries') && (
               <div>
                 <div className="gf-form">
                   <FormField
@@ -174,7 +178,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
                 onChange={this.onFieldValueChange}
               ></FormField>
             </div>
-            {queryType === 'rawlogs' && (
+            {(queryType === 'rawlogs' || queryType === 'slowQueries') && (
               <div className="gf-form">
                 <FormField
                   label="Number of rows"
@@ -187,7 +191,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
                 ></FormField>
               </div>
             )}
-            {queryType === 'rawlogs' && (
+            {(queryType === 'rawlogs' || queryType === 'slowQueries') && (
               <div className="gf-form">
                 <FormField
                   label="Start page"
@@ -200,6 +204,32 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
                 ></FormField>
               </div>
             )}
+          </div>
+        )}
+        {queryType === 'slowQueries' && (
+          <div className="gf-form-inline">
+            <div className="gf-form">
+              <FormField
+                label="Rex Query"
+                type="text"
+                value={rexQuery}
+                labelWidth={labelWidth}
+                width={4}
+                name="rexQuery"
+                onChange={this.onFieldValueChange}
+              ></FormField>
+            </div>
+            <div className="gf-form">
+              <FormField
+                label="Output Fields"
+                type="text"
+                value={rexOutFields}
+                labelWidth={labelWidth}
+                width={4}
+                name="rexOutFields"
+                onChange={this.onFieldValueChange}
+              ></FormField>
+            </div>
           </div>
         )}
       </div>

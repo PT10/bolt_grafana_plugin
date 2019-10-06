@@ -142,14 +142,19 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           fl: this.timestampField + (query.fl ? ',' + query.fl : ''),
           rows: numRows,
           start: start,
-          getRawMessages: query.queryType === 'rawlogs' || query.queryType === 'count' ? true : false,
         };
 
         // Add fields specific to raw logs and single stat on raw logs
-        if (query.queryType === 'rawlogs' || query.queryType === 'count') {
+        if (query.queryType === 'rawlogs' || query.queryType === 'count' || query.queryType === 'slowQueries') {
           solrQuery['collectionWindow'] = this.rawCollectionWindow;
           solrQuery['startTime'] = startTime;
           solrQuery['endTime'] = endTime;
+          solrQuery['getRawMessages'] = true;
+        }
+
+        if (query.queryType === 'slowQueries') {
+          solrQuery['rex.message.q'] = query.rexQuery;
+          solrQuery['rex.message.outputfields'] = query.rexOutFields;
         }
 
         // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)

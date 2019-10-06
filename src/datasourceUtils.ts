@@ -27,11 +27,11 @@ export class Utils {
       seriesList = [];
       const jobs = data.facets.lineChartFacet.buckets;
       jobs.forEach((job: any) => {
-        const jobId = job.val;
+        //const jobId = job.val;
         const partFields = job.group.buckets;
         partFields.forEach((partField: any) => {
           const partFieldJson = JSON.parse(partField.val);
-          const jobIdWithPartField = jobId + '_' + partFieldJson.aggr_field;
+          const jobIdWithPartField = /*jobId + '_' + */ partFieldJson.aggr_field;
           const buckets = partField.timestamp.buckets;
           const actualSeries: any[] = [];
           const scoreSeries: any[] = [];
@@ -53,16 +53,16 @@ export class Utils {
             anomalySeries.push([anomaly, ts]);
           });
 
-          seriesList.push({
+          /*seriesList.push({
             target: jobIdWithPartField + '_actual',
             datapoints: actualSeries,
           });
           seriesList.push({
             target: jobIdWithPartField + '_score',
             datapoints: scoreSeries,
-          });
+          });*/
           seriesList.push({
-            target: jobIdWithPartField + '_anomaly',
+            target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries,
           });
         });
@@ -102,7 +102,7 @@ export class Utils {
 
         return totalA - totalB;
       });
-    } else if (format === 'rawlogs') {
+    } else if (format === 'rawlogs' || format === 'slowQueries') {
       // Table
       const columns: any[] = [];
       const rows: any[] = [];

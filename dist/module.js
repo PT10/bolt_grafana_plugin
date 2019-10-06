@@ -463,14 +463,19 @@ function (_super) {
         q: q,
         fl: _this.timestampField + (query.fl ? ',' + query.fl : ''),
         rows: numRows,
-        start: start,
-        getRawMessages: query.queryType === 'rawlogs' || query.queryType === 'count' ? true : false
+        start: start
       }; // Add fields specific to raw logs and single stat on raw logs
 
-      if (query.queryType === 'rawlogs' || query.queryType === 'count') {
+      if (query.queryType === 'rawlogs' || query.queryType === 'count' || query.queryType === 'slowQueries') {
         solrQuery['collectionWindow'] = _this.rawCollectionWindow;
         solrQuery['startTime'] = startTime;
         solrQuery['endTime'] = endTime;
+        solrQuery['getRawMessages'] = true;
+      }
+
+      if (query.queryType === 'slowQueries') {
+        solrQuery['rex.message.q'] = query.rexQuery;
+        solrQuery['rex.message.outputfields'] = query.rexOutFields;
       } // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)
       // TODO: Find out why numFounf is returned only after specifying the facet
 
@@ -748,11 +753,13 @@ function () {
       seriesList = [];
       var jobs = data.facets.lineChartFacet.buckets;
       jobs.forEach(function (job) {
-        var jobId = job.val;
+        //const jobId = job.val;
         var partFields = job.group.buckets;
         partFields.forEach(function (partField) {
           var partFieldJson = JSON.parse(partField.val);
-          var jobIdWithPartField = jobId + '_' + partFieldJson.aggr_field;
+          var jobIdWithPartField =
+          /*jobId + '_' + */
+          partFieldJson.aggr_field;
           var buckets = partField.timestamp.buckets;
           var actualSeries = [];
           var scoreSeries = [];
@@ -775,16 +782,17 @@ function () {
             scoreSeries.push([score, ts]);
             anomalySeries.push([anomaly, ts]);
           });
-          seriesList.push({
+          /*seriesList.push({
             target: jobIdWithPartField + '_actual',
-            datapoints: actualSeries
+            datapoints: actualSeries,
           });
           seriesList.push({
             target: jobIdWithPartField + '_score',
-            datapoints: scoreSeries
-          });
+            datapoints: scoreSeries,
+          });*/
+
           seriesList.push({
-            target: jobIdWithPartField + '_anomaly',
+            target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries
           });
         });
@@ -824,7 +832,7 @@ function () {
 
         return totalA - totalB;
       });
-    } else if (format === 'rawlogs') {
+    } else if (format === 'rawlogs' || format === 'slowQueries') {
       // Table
       var columns_1 = [];
       var rows_1 = [];
@@ -1083,7 +1091,9 @@ function (_super) {
       start: query.start || 0,
       facetQuery: query.facetQuery,
       sortField: query.sortField,
-      sortOrder: query.sortOrder
+      sortOrder: query.sortOrder,
+      rexQuery: query.rexQuery || 's*.*s*[c:(.*)ss:(.*)sr:(.*)sx:(.*)]s*o.a.s.c.S.SlowRequest.*path=(.*)s*params={(.*)}s*.*hits=(.*)s*status.*QTime=(.*)',
+      rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime'
     });
     var onChange = _this.props.onChange;
     onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, _this.state));
@@ -1099,6 +1109,9 @@ function (_super) {
     }, {
       value: 'rawlogs',
       displayName: 'Raw Logs'
+    }, {
+      value: 'slowQueries',
+      displayName: 'Slow Queries'
     }, {
       value: 'count',
       displayName: 'Count'
@@ -1117,7 +1130,9 @@ function (_super) {
         numRows = _a.numRows,
         start = _a.start,
         sortField = _a.sortField,
-        sortOrder = _a.sortOrder;
+        sortOrder = _a.sortOrder,
+        rexQuery = _a.rexQuery,
+        rexOutFields = _a.rexOutFields;
     var labelWidth = 8;
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
@@ -1155,9 +1170,9 @@ function (_super) {
       width: 4,
       name: "collection",
       onChange: this.onFieldValueChange
-    }))), (queryType === 'chart' || queryType === 'rawlogs') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }))), (queryType === 'chart' || queryType === 'rawlogs' || queryType === 'slowQueries') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
-    }, queryType === 'rawlogs' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }, (queryType === 'rawlogs' || queryType === 'slowQueries') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Sort",
@@ -1187,7 +1202,7 @@ function (_super) {
       width: 4,
       name: "fl",
       onChange: this.onFieldValueChange
-    })), queryType === 'rawlogs' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), (queryType === 'rawlogs' || queryType === 'slowQueries') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Number of rows",
@@ -1197,7 +1212,7 @@ function (_super) {
       width: 6,
       name: "numRows",
       onChange: this.onFieldValueChange
-    })), queryType === 'rawlogs' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), (queryType === 'rawlogs' || queryType === 'slowQueries') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Start page",
@@ -1206,6 +1221,28 @@ function (_super) {
       labelWidth: labelWidth,
       width: 4,
       name: "start",
+      onChange: this.onFieldValueChange
+    }))), queryType === 'slowQueries' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form-inline"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+      label: "Rex Query",
+      type: "text",
+      value: rexQuery,
+      labelWidth: labelWidth,
+      width: 4,
+      name: "rexQuery",
+      onChange: this.onFieldValueChange
+    })), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+      label: "Output Fields",
+      type: "text",
+      value: rexOutFields,
+      labelWidth: labelWidth,
+      width: 4,
+      name: "rexOutFields",
       onChange: this.onFieldValueChange
     }))));
   };
