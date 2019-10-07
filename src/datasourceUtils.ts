@@ -152,9 +152,11 @@ export class Utils {
         const dayBuckets = job.Day0.buckets;
         const seriesData: any[] = [];
         dayBuckets.forEach((bucket: any) => {
+          const d: Date = new Date(bucket.val);
           if (bucket.score != null && bucket.score.score != null) {
-            const d: Date = new Date(bucket.val);
             seriesData.push([bucket.score.score, d.getTime()]);
+          } else {
+            seriesData.push([0, d.getTime()]);
           }
         });
         seriesList.push({

@@ -881,9 +881,12 @@ function () {
         var dayBuckets = job.Day0.buckets;
         var seriesData = [];
         dayBuckets.forEach(function (bucket) {
+          var d = new Date(bucket.val);
+
           if (bucket.score != null && bucket.score.score != null) {
-            var d = new Date(bucket.val);
             seriesData.push([bucket.score.score, d.getTime()]);
+          } else {
+            seriesData.push([0, d.getTime()]);
           }
         });
         seriesList.push({
