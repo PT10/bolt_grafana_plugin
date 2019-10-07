@@ -50,12 +50,14 @@ export class Utils {
           const actualSeries: any[] = [];
           const scoreSeries: any[] = [];
           const anomalySeries: any[] = [];
+          const expectedSeries: any[] = [];
           buckets.forEach((timeBucket: any) => {
             const d: Date = new Date(timeBucket.val);
             const ts = d.getTime();
             const actual = timeBucket.actual.buckets[0].val;
             let score = timeBucket.score.buckets[0].val;
             let anomaly = timeBucket.anomaly.buckets[0].val;
+            const expected = timeBucket.expected.buckets[0].val;
             if (score >= 1 && anomaly) {
               anomaly = actual;
             } else {
@@ -65,6 +67,7 @@ export class Utils {
             actualSeries.push([actual, ts]);
             scoreSeries.push([score, ts]);
             anomalySeries.push([anomaly, ts]);
+            expectedSeries.push([expected, ts]);
           });
 
           seriesList.push({
@@ -79,6 +82,10 @@ export class Utils {
             target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries,
           });
+          seriesList.push({
+            target: jobIdWithPartField + ' expected',
+            datapoints: expectedSeries,
+          });
         });
       });
     } else if (data.facets && data.facets.heatMapByPartFieldsFacet) {
@@ -92,9 +99,11 @@ export class Utils {
           const dayBuckets = partField.Day0.buckets;
           const seriesData: any[] = [];
           dayBuckets.forEach((bucket: any) => {
+            const d: Date = new Date(bucket.val);
             if (bucket.score != null && bucket.score.score != null) {
-              const d: Date = new Date(bucket.val);
               seriesData.push([bucket.score.score, d.getTime()]);
+            } else {
+              seriesData.push([0, d.getTime()]);
             }
           });
           // Derive series name from part fields
