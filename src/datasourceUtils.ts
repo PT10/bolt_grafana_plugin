@@ -26,11 +26,12 @@ export class Utils {
     if (data.facets && data.facets.lineChartFacet) {
       seriesList = [];
       const jobs = data.facets.lineChartFacet.buckets;
+      const multiJobQuery = jobs.length > 1;
       jobs.forEach((job: any) => {
-        const jobId = job.val;
+        const jobId = multiJobQuery ? job.val : '';
         const partFields = job.group.buckets;
         partFields.forEach((partField: any) => {
-          let jobIdWithPartField = jobId;
+          let jobIdWithPartField: string = jobId;
 
           const partFieldJson = JSON.parse(partField.val);
           Object.keys(partFieldJson).forEach(key => {
@@ -40,6 +41,10 @@ export class Utils {
             jobIdWithPartField += '_' + key + '_' + partFieldJson[key];
           });
           jobIdWithPartField += '_' + partFieldJson.aggr_field;
+
+          if (jobIdWithPartField.startsWith('_')) {
+            jobIdWithPartField = jobIdWithPartField.slice(1);
+          }
 
           const buckets = partField.timestamp.buckets;
           const actualSeries: any[] = [];
@@ -75,6 +80,60 @@ export class Utils {
             datapoints: anomalySeries,
           });
         });
+      });
+    } else if (data.facets && data.facets.heatMapByPartFieldsFacet) {
+      // Heatmap
+      seriesList = [];
+      const jobs = data.facets.heatMapByPartFieldsFacet.buckets;
+      const multiJobQuery = jobs.length > 1;
+      jobs.forEach((job: any) => {
+        const partBuckets = job.partField.buckets;
+        partBuckets.forEach((partField: any) => {
+          const dayBuckets = partField.Day0.buckets;
+          const seriesData: any[] = [];
+          dayBuckets.forEach((bucket: any) => {
+            if (bucket.score != null && bucket.score.score != null) {
+              const d: Date = new Date(bucket.val);
+              seriesData.push([bucket.score.score, d.getTime()]);
+            }
+          });
+          // Derive series name from part fields
+          const partFieldJson = JSON.parse(partField.val);
+          let seriesName = multiJobQuery ? job.val : '';
+          Object.keys(partFieldJson).forEach(key => {
+            if (key === 'aggr_field') {
+              return;
+            }
+            seriesName += '_' + key + '_' + partFieldJson[key];
+          });
+          seriesName += '_' + partFieldJson.aggr_field;
+
+          if (seriesName.startsWith('_')) {
+            seriesName = seriesName.slice(1);
+          }
+
+          seriesList.push({
+            target: seriesName,
+            datapoints: seriesData,
+          });
+        });
+      });
+
+      seriesList.sort((a: any, b: any) => {
+        let totalA = 0;
+        let totalB = 0;
+        if (a.datapoints && b.datapoints) {
+          a.datapoints.map((d: any) => {
+            totalA += d[0];
+          });
+          b.datapoints.map((d: any) => {
+            totalB += d[0];
+          });
+        } else {
+          return 0;
+        }
+
+        return totalA - totalB;
       });
     } else if (data.facets && data.facets.heatMapFacet) {
       // Heatmap

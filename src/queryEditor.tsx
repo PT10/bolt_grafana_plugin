@@ -85,6 +85,10 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         value: 'aggAnomaly',
       },
       {
+        displayName: 'Anomalies by partition field',
+        value: 'aggAnomalyByPartFields',
+      },
+      {
         displayName: 'Individual Anomalies',
         value: 'indvAnomaly',
       },
@@ -120,7 +124,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               onChange={this.onFieldValueChange}
             ></FormField>
           </div>
-          {queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && (
+          {queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'aggAnomalyByPartFields' && (
             <div className="gf-form">
               <FormField
                 label="Collection"
