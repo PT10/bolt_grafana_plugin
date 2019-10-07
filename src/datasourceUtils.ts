@@ -30,8 +30,17 @@ export class Utils {
         const jobId = job.val;
         const partFields = job.group.buckets;
         partFields.forEach((partField: any) => {
+          let jobIdWithPartField = jobId;
+
           const partFieldJson = JSON.parse(partField.val);
-          const jobIdWithPartField = jobId + '_' + partFieldJson.aggr_field;
+          Object.keys(partFieldJson).forEach(key => {
+            if (key === 'aggr_field') {
+              return;
+            }
+            jobIdWithPartField += '_' + key + '_' + partFieldJson[key];
+          });
+          jobIdWithPartField += '_' + partFieldJson.aggr_field;
+
           const buckets = partField.timestamp.buckets;
           const actualSeries: any[] = [];
           const scoreSeries: any[] = [];
@@ -54,15 +63,15 @@ export class Utils {
           });
 
           seriesList.push({
-            target: jobIdWithPartField + '_actual',
+            target: jobIdWithPartField + ' actual',
             datapoints: actualSeries,
           });
           seriesList.push({
-            target: jobIdWithPartField + '_score',
+            target: jobIdWithPartField + ' score',
             datapoints: scoreSeries,
           });
           seriesList.push({
-            target: jobIdWithPartField + '_anomaly',
+            target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries,
           });
         });

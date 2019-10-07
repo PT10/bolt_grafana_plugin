@@ -120,7 +120,11 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         if (!query.query) {
           return Promise.resolve([]);
         }
-        const q = Utils.queryBuilder(this.templateSrv.replace(query.query, options.scopedVars));
+        let q = Utils.queryBuilder(this.templateSrv.replace(query.query, options.scopedVars));
+        // Provision for empty series filter
+        if (q.match(/AND\s*$/)) {
+          q = q.slice(0, q.lastIndexOf('AND'));
+        }
         let start = this.templateSrv.replace(query.start, options.scopedVars);
         let numRows = this.templateSrv.replace(query.numRows.toString(), options.scopedVars) || 100;
 

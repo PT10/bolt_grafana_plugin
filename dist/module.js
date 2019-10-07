@@ -441,7 +441,11 @@ function (_super) {
         return Promise.resolve([]);
       }
 
-      var q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(_this.templateSrv.replace(query.query, options.scopedVars));
+      var q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(_this.templateSrv.replace(query.query, options.scopedVars)); // Provision for empty series filter
+
+      if (q.match(/AND\s*$/)) {
+        q = q.slice(0, q.lastIndexOf('AND'));
+      }
 
       var start = _this.templateSrv.replace(query.start, options.scopedVars);
 
@@ -751,8 +755,16 @@ function () {
         var jobId = job.val;
         var partFields = job.group.buckets;
         partFields.forEach(function (partField) {
+          var jobIdWithPartField = jobId;
           var partFieldJson = JSON.parse(partField.val);
-          var jobIdWithPartField = jobId + '_' + partFieldJson.aggr_field;
+          Object.keys(partFieldJson).forEach(function (key) {
+            if (key === 'aggr_field') {
+              return;
+            }
+
+            jobIdWithPartField += '_' + key + '_' + partFieldJson[key];
+          });
+          jobIdWithPartField += '_' + partFieldJson.aggr_field;
           var buckets = partField.timestamp.buckets;
           var actualSeries = [];
           var scoreSeries = [];
@@ -776,15 +788,15 @@ function () {
             anomalySeries.push([anomaly, ts]);
           });
           seriesList.push({
-            target: jobIdWithPartField + '_actual',
+            target: jobIdWithPartField + ' actual',
             datapoints: actualSeries
           });
           seriesList.push({
-            target: jobIdWithPartField + '_score',
+            target: jobIdWithPartField + ' score',
             datapoints: scoreSeries
           });
           seriesList.push({
-            target: jobIdWithPartField + '_anomaly',
+            target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries
           });
         });
