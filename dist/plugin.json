@@ -1,7 +1,7 @@
 {
   "type": "datasource",
   "name": "Bolt",
-  "id": "myorgid-bolt-datasource",
+  "id": "boltanalytics-Solr-datasource",
   "metrics": true,
 
   "info": {
@@ -11,8 +11,8 @@
     },
     "keywords": ["Bolt"],
     "logos": {
-      "small": "img/logo.png",
-      "large": "img/logo.png"
+      "small": "img/Bolt-Logo.svg",
+      "large": "img/Bolt-Logo.svg"
     },
     "links": [
       {"name": "Website", "url": "https://github.com/grafana/simple-react-panel"},
@@ -20,7 +20,7 @@
     ],
     "screenshots": [],
     "version": "1.0.0",
-    "updated": "2019-10-04"
+    "updated": "2019-10-09"
   },
 
   "dependencies": {

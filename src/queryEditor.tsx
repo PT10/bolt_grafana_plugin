@@ -51,7 +51,9 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       sortField: query.sortField,
       sortOrder: query.sortOrder,
       rexQuery:
-        query.rexQuery || 's*.*s*[c:(.*)ss:(.*)sr:(.*)sx:(.*)]s*o.a.s.c.S.SlowRequest.*path=(.*)s*params={(.*)}s*.*hits=(.*)s*status.*QTime=(.*)',
+        query.rexQuery ||
+        '\\s*.*\\s*\\[c\\:(.*)\\ss\\:(.*)\\sr\\:(.*)\\sx\\:(.*)\\]\\s*o.a.s.c.S.SlowRequest.*path=(.*)\\s*' +
+          'params=\\{(.*)\\}\\s*.*hits=(.*)\\s*status.*QTime=(.*)',
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
     };
 
