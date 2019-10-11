@@ -374,7 +374,8 @@ function (_super) {
     _this.totalCount = undefined;
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
-      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"}}}}}}}}'
+      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"}}}}}}}}',
+      correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
     _this.$q = $q;
     _this.templateSrv = templateSrv;
@@ -582,7 +583,7 @@ function (_super) {
 
     return this.backendSrv.datasourceRequest(params).then(function (response) {
       if (response.status === 200) {
-        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField);
+        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, query.baseMetric);
         respArr.push(processedData);
 
         if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
@@ -722,6 +723,7 @@ function (_super) {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Utils", function() { return Utils; });
+/* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! tslib */ "../node_modules/tslib/tslib.es6.js");
 /*
  *
  *  Copyright (C) 2019 Bolt Analytics Corporation
@@ -739,12 +741,16 @@ __webpack_require__.r(__webpack_exports__);
  *      limitations under the License.
  *
  */
+
+
 var Utils =
 /** @class */
 function () {
   function Utils() {}
 
-  Utils.processResponse = function (response, format, timeField) {
+  Utils.processResponse = function (response, format, timeField, correlationMetric) {
+    var _this = this;
+
     var data = response.data;
     var seriesList;
     var series = {}; // Process line chart facet response
@@ -782,20 +788,75 @@ function () {
             scoreSeries.push([score, ts]);
             anomalySeries.push([anomaly, ts]);
           });
-          /*seriesList.push({
-            target: jobIdWithPartField + '_actual',
-            datapoints: actualSeries,
+          seriesList.push({
+            target: jobIdWithPartField + ' actual',
+            datapoints: actualSeries
           });
           seriesList.push({
             target: jobIdWithPartField + '_score',
-            datapoints: scoreSeries,
-          });*/
-
+            datapoints: scoreSeries
+          });
           seriesList.push({
             target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries
           });
         });
+      });
+    } else if (data.facets && data.facets.correlation) {
+      seriesList = [];
+      var jobs = data.facets.correlation.buckets;
+      var baseline_1 = []; // Find baseline series and populate base metric
+
+      jobs.forEach(function (job) {
+        if (job.val === correlationMetric) {
+          var partFields = job.group.buckets;
+          partFields.forEach(function (partField) {
+            var partFieldJson = JSON.parse(partField.val);
+            var jobIdWithPartField = partFieldJson.aggr_field;
+            var buckets = partField.timestamp.buckets;
+            var actualSeries = [];
+            buckets.forEach(function (timeBucket) {
+              var d = new Date(timeBucket.val);
+              var ts = d.getTime();
+              var actual = timeBucket.actual.buckets[0].val;
+              actualSeries.push([actual, ts]);
+              baseline_1.push(actual);
+            });
+            seriesList.push({
+              target: jobIdWithPartField,
+              datapoints: actualSeries
+            });
+          });
+        }
+      });
+      baseline_1 = this.getStdDev(baseline_1); // Populate other metrics and find deviation from baseline
+
+      jobs.forEach(function (job) {
+        if (job.val !== correlationMetric) {
+          var partFields = job.group.buckets;
+          partFields.forEach(function (partField) {
+            var partFieldJson = JSON.parse(partField.val);
+            var jobIdWithPartField = partFieldJson.aggr_field;
+            var buckets = partField.timestamp.buckets;
+            var actualSeries = [];
+            var compare = [];
+            buckets.forEach(function (timeBucket) {
+              var d = new Date(timeBucket.val);
+              var ts = d.getTime();
+              var actual = timeBucket.actual.buckets[0].val;
+              compare.push(actual);
+              actualSeries.push([actual, ts]);
+            });
+            compare = _this.getStdDev(compare);
+
+            var dev = _this.findCorrelation(baseline_1, compare);
+
+            seriesList.push({
+              target: jobIdWithPartField + ': ' + dev.toFixed(3),
+              datapoints: actualSeries
+            });
+          });
+        }
       });
     } else if (data.facets && data.facets.heatMapFacet) {
       // Heatmap
@@ -963,6 +1024,36 @@ function () {
     }
   };
 
+  Utils.getStdDev = function (series) {
+    var min = Math.min.apply(Math, tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"](series));
+    var max = Math.max.apply(Math, tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"](series));
+    series = series.map(function (b) {
+      return (b - min) / (max - min);
+    });
+    return series;
+  };
+
+  Utils.findCorrelation = function (x, y) {
+    var sumX = 0,
+        sumY = 0,
+        sumXY = 0,
+        sumX2 = 0,
+        sumY2 = 0;
+
+    var minLength = x.length = y.length = Math.min(x.length, y.length),
+        reduce = function reduce(xi, idx) {
+      var yi = y[idx];
+      sumX += xi;
+      sumY += yi;
+      sumXY += xi * yi;
+      sumX2 += xi * xi;
+      sumY2 += yi * yi;
+    };
+
+    x.forEach(reduce);
+    return (minLength * sumXY - sumX * sumY) / Math.sqrt((minLength * sumX2 - sumX * sumX) * (minLength * sumY2 - sumY * sumY));
+  };
+
   Utils.queryBuilder = function (query) {
     return query.replace(/{/g, '(').replace(/}/g, ')').replace(/,/g, ' OR ');
   };
@@ -1093,7 +1184,8 @@ function (_super) {
       sortField: query.sortField,
       sortOrder: query.sortOrder,
       rexQuery: query.rexQuery || '\\s*.*\\s*\\[c\\:(.*)\\ss\\:(.*)\\sr\\:(.*)\\sx\\:(.*)\\]\\s*o.a.s.c.S.SlowRequest.*path=(.*)\\s*' + 'params=\\{(.*)\\}\\s*.*hits=(.*)\\s*status.*QTime=(.*)',
-      rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime'
+      rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
+      baseMetric: query.baseMetric
     });
     var onChange = _this.props.onChange;
     onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, _this.state));
@@ -1121,6 +1213,9 @@ function (_super) {
     }, {
       displayName: 'Individual Anomalies',
       value: 'indvAnomaly'
+    }, {
+      displayName: 'Correlation',
+      value: 'correlation'
     }];
     var _a = this.state,
         query = _a.query,
@@ -1132,7 +1227,8 @@ function (_super) {
         sortField = _a.sortField,
         sortOrder = _a.sortOrder,
         rexQuery = _a.rexQuery,
-        rexOutFields = _a.rexOutFields;
+        rexOutFields = _a.rexOutFields,
+        baseMetric = _a.baseMetric;
     var labelWidth = 8;
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
@@ -1160,7 +1256,7 @@ function (_super) {
       width: 4,
       name: "query",
       onChange: this.onFieldValueChange
-    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Collection",
@@ -1169,6 +1265,16 @@ function (_super) {
       labelWidth: labelWidth,
       width: 4,
       name: "collection",
+      onChange: this.onFieldValueChange
+    })), queryType === 'correlation' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+      label: "Base Metric",
+      type: "text",
+      value: baseMetric,
+      labelWidth: labelWidth,
+      width: 4,
+      name: "baseMetric",
       onChange: this.onFieldValueChange
     }))), (queryType === 'chart' || queryType === 'rawlogs' || queryType === 'slowQueries') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"

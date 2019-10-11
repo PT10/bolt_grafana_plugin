@@ -17,7 +17,7 @@
  */
 
 export class Utils {
-  static processResponse(response: any, format: any, timeField: string) {
+  static processResponse(response: any, format: any, timeField: string, correlationMetric?: string) {
     const data = response.data;
     let seriesList: any;
     const series: any = {};
@@ -53,19 +53,81 @@ export class Utils {
             anomalySeries.push([anomaly, ts]);
           });
 
-          /*seriesList.push({
-            target: jobIdWithPartField + '_actual',
+          seriesList.push({
+            target: jobIdWithPartField + ' actual',
             datapoints: actualSeries,
           });
           seriesList.push({
             target: jobIdWithPartField + '_score',
             datapoints: scoreSeries,
-          });*/
+          });
           seriesList.push({
             target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries,
           });
         });
+      });
+    } else if (data.facets && data.facets.correlation) {
+      seriesList = [];
+      const jobs = data.facets.correlation.buckets;
+
+      let baseline: number[] = [];
+      // Find baseline series and populate base metric
+      jobs.forEach((job: any) => {
+        if (job.val === correlationMetric) {
+          const partFields = job.group.buckets;
+          partFields.forEach((partField: any) => {
+            const partFieldJson = JSON.parse(partField.val);
+            const jobIdWithPartField = partFieldJson.aggr_field;
+            const buckets = partField.timestamp.buckets;
+            const actualSeries: any[] = [];
+            buckets.forEach((timeBucket: any) => {
+              const d: Date = new Date(timeBucket.val);
+              const ts = d.getTime();
+              const actual = timeBucket.actual.buckets[0].val;
+
+              actualSeries.push([actual, ts]);
+              baseline.push(actual);
+            });
+
+            seriesList.push({
+              target: jobIdWithPartField,
+              datapoints: actualSeries,
+            });
+          });
+        }
+      });
+
+      baseline = this.getStdDev(baseline);
+
+      // Populate other metrics and find deviation from baseline
+      jobs.forEach((job: any) => {
+        if (job.val !== correlationMetric) {
+          const partFields = job.group.buckets;
+          partFields.forEach((partField: any) => {
+            const partFieldJson = JSON.parse(partField.val);
+            const jobIdWithPartField = partFieldJson.aggr_field;
+            const buckets = partField.timestamp.buckets;
+            const actualSeries: any[] = [];
+
+            let compare: any[] = [];
+            buckets.forEach((timeBucket: any) => {
+              const d: Date = new Date(timeBucket.val);
+              const ts = d.getTime();
+              const actual = timeBucket.actual.buckets[0].val;
+              compare.push(actual);
+              actualSeries.push([actual, ts]);
+            });
+
+            compare = this.getStdDev(compare);
+            const dev = this.findCorrelation(baseline, compare);
+
+            seriesList.push({
+              target: jobIdWithPartField + ': ' + dev.toFixed(3),
+              datapoints: actualSeries,
+            });
+          });
+        }
       });
     } else if (data.facets && data.facets.heatMapFacet) {
       // Heatmap
@@ -217,6 +279,36 @@ export class Utils {
           };
         });
     }
+  }
+
+  static getStdDev(series: number[]) {
+    const min = Math.min(...series);
+    const max = Math.max(...series);
+
+    series = series.map(b => {
+      return (b - min) / (max - min);
+    });
+
+    return series;
+  }
+
+  static findCorrelation(x: any, y: any) {
+    let sumX = 0,
+      sumY = 0,
+      sumXY = 0,
+      sumX2 = 0,
+      sumY2 = 0;
+    const minLength = (x.length = y.length = Math.min(x.length, y.length)),
+      reduce = (xi: any, idx: any) => {
+        const yi = y[idx];
+        sumX += xi;
+        sumY += yi;
+        sumXY += xi * yi;
+        sumX2 += xi * xi;
+        sumY2 += yi * yi;
+      };
+    x.forEach(reduce);
+    return (minLength * sumXY - sumX * sumY) / Math.sqrt((minLength * sumX2 - sumX * sumX) * (minLength * sumY2 - sumY * sumY));
   }
 
   static queryBuilder(query: string) {

@@ -30,6 +30,7 @@ export interface BoltQuery extends DataQuery {
   sortOrder: string;
   rexQuery: string;
   rexOutFields: string;
+  baseMetric: string;
 }
 
 export interface BoltOptions extends DataSourceJsonData {

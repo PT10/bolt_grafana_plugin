@@ -55,6 +55,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         '\\s*.*\\s*\\[c\\:(.*)\\ss\\:(.*)\\sr\\:(.*)\\sx\\:(.*)\\]\\s*o.a.s.c.S.SlowRequest.*path=(.*)\\s*' +
           'params=\\{(.*)\\}\\s*.*hits=(.*)\\s*status.*QTime=(.*)',
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
+      baseMetric: query.baseMetric,
     };
 
     const { onChange } = this.props;
@@ -94,8 +95,12 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         displayName: 'Individual Anomalies',
         value: 'indvAnomaly',
       },
+      {
+        displayName: 'Correlation',
+        value: 'correlation',
+      },
     ];
-    const { query, collection, fl, queryType, numRows, start, sortField, sortOrder, rexQuery, rexOutFields } = this.state;
+    const { query, collection, fl, queryType, numRows, start, sortField, sortOrder, rexQuery, rexOutFields, baseMetric } = this.state;
     const labelWidth = 8;
 
     return (
@@ -126,7 +131,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               onChange={this.onFieldValueChange}
             ></FormField>
           </div>
-          {queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && (
+          {queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && (
             <div className="gf-form">
               <FormField
                 label="Collection"
@@ -135,6 +140,19 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
                 labelWidth={labelWidth}
                 width={4}
                 name="collection"
+                onChange={this.onFieldValueChange}
+              ></FormField>
+            </div>
+          )}
+          {queryType === 'correlation' && (
+            <div className="gf-form">
+              <FormField
+                label="Base Metric"
+                type="text"
+                value={baseMetric}
+                labelWidth={labelWidth}
+                width={4}
+                name="baseMetric"
                 onChange={this.onFieldValueChange}
               ></FormField>
             </div>
