@@ -374,7 +374,7 @@ function (_super) {
     _this.totalCount = undefined;
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
-      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"}}}}}}}}',
+      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
       correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
     _this.$q = $q;
@@ -768,12 +768,14 @@ function () {
           partFieldJson.aggr_field;
           var buckets = partField.timestamp.buckets;
           var actualSeries = [];
+          var expectedSeries = [];
           var scoreSeries = [];
           var anomalySeries = [];
           buckets.forEach(function (timeBucket) {
             var d = new Date(timeBucket.val);
             var ts = d.getTime();
             var actual = timeBucket.actual.buckets[0].val;
+            var expected = timeBucket.expected.buckets[0].val;
             var score = timeBucket.score.buckets[0].val;
             var anomaly = timeBucket.anomaly.buckets[0].val;
 
@@ -787,18 +789,23 @@ function () {
             actualSeries.push([actual, ts]);
             scoreSeries.push([score, ts]);
             anomalySeries.push([anomaly, ts]);
+            expectedSeries.push([expected, ts]);
           });
           seriesList.push({
             target: jobIdWithPartField + ' actual',
             datapoints: actualSeries
           });
           seriesList.push({
-            target: jobIdWithPartField + '_score',
+            target: jobIdWithPartField + ' score',
             datapoints: scoreSeries
           });
           seriesList.push({
             target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries
+          });
+          seriesList.push({
+            target: jobIdWithPartField + ' expected',
+            datapoints: expectedSeries
           });
         });
       });

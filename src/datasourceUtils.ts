@@ -34,12 +34,14 @@ export class Utils {
           const jobIdWithPartField = /*jobId + '_' + */ partFieldJson.aggr_field;
           const buckets = partField.timestamp.buckets;
           const actualSeries: any[] = [];
+          const expectedSeries: any[] = [];
           const scoreSeries: any[] = [];
           const anomalySeries: any[] = [];
           buckets.forEach((timeBucket: any) => {
             const d: Date = new Date(timeBucket.val);
             const ts = d.getTime();
             const actual = timeBucket.actual.buckets[0].val;
+            const expected = timeBucket.expected.buckets[0].val;
             let score = timeBucket.score.buckets[0].val;
             let anomaly = timeBucket.anomaly.buckets[0].val;
             if (score >= 1 && anomaly) {
@@ -51,6 +53,7 @@ export class Utils {
             actualSeries.push([actual, ts]);
             scoreSeries.push([score, ts]);
             anomalySeries.push([anomaly, ts]);
+            expectedSeries.push([expected, ts]);
           });
 
           seriesList.push({
@@ -58,12 +61,16 @@ export class Utils {
             datapoints: actualSeries,
           });
           seriesList.push({
-            target: jobIdWithPartField + '_score',
+            target: jobIdWithPartField + ' score',
             datapoints: scoreSeries,
           });
           seriesList.push({
             target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries,
+          });
+          seriesList.push({
+            target: jobIdWithPartField + ' expected',
+            datapoints: expectedSeries,
           });
         });
       });
