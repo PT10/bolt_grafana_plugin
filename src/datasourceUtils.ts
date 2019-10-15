@@ -17,7 +17,7 @@
  */
 
 export class Utils {
-  static processResponse(response: any, format: any, timeField: string) {
+  static processResponse(response: any, format: any, timeField: string, correlationMetric?: string) {
     const data = response.data;
     let seriesList: any;
     const series: any = {};
@@ -32,7 +32,6 @@ export class Utils {
         const partFields = job.group.buckets;
         partFields.forEach((partField: any) => {
           let jobIdWithPartField: string = jobId;
-
           const partFieldJson = JSON.parse(partField.val);
           Object.keys(partFieldJson).forEach(key => {
             if (key === 'aggr_field') {
@@ -48,6 +47,7 @@ export class Utils {
 
           const buckets = partField.timestamp.buckets;
           const actualSeries: any[] = [];
+          const expectedSeries: any[] = [];
           const scoreSeries: any[] = [];
           const anomalySeries: any[] = [];
           const expectedSeries: any[] = [];
@@ -55,6 +55,7 @@ export class Utils {
             const d: Date = new Date(timeBucket.val);
             const ts = d.getTime();
             const actual = timeBucket.actual.buckets[0].val;
+            const expected = timeBucket.expected.buckets[0].val;
             let score = timeBucket.score.buckets[0].val;
             let anomaly = timeBucket.anomaly.buckets[0].val;
             const expected = timeBucket.expected.buckets[0].val;
@@ -88,6 +89,67 @@ export class Utils {
           });
         });
       });
+    } else if (data.facets && data.facets.correlation) {
+      seriesList = [];
+      const jobs = data.facets.correlation.buckets;
+
+      let baseline: number[] = [];
+      // Find baseline series and populate base metric
+      jobs.forEach((job: any) => {
+        if (job.val === correlationMetric) {
+          const partFields = job.group.buckets;
+          partFields.forEach((partField: any) => {
+            const partFieldJson = JSON.parse(partField.val);
+            const jobIdWithPartField = partFieldJson.aggr_field;
+            const buckets = partField.timestamp.buckets;
+            const actualSeries: any[] = [];
+            buckets.forEach((timeBucket: any) => {
+              const d: Date = new Date(timeBucket.val);
+              const ts = d.getTime();
+              const actual = timeBucket.actual.buckets[0].val;
+
+              actualSeries.push([actual, ts]);
+              baseline.push(actual);
+            });
+
+            seriesList.push({
+              target: jobIdWithPartField,
+              datapoints: actualSeries,
+            });
+          });
+        }
+      });
+
+      baseline = this.getStdDev(baseline);
+
+      // Populate other metrics and find deviation from baseline
+      jobs.forEach((job: any) => {
+        if (job.val !== correlationMetric) {
+          const partFields = job.group.buckets;
+          partFields.forEach((partField: any) => {
+            const partFieldJson = JSON.parse(partField.val);
+            const jobIdWithPartField = partFieldJson.aggr_field;
+            const buckets = partField.timestamp.buckets;
+            const actualSeries: any[] = [];
+
+            let compare: any[] = [];
+            buckets.forEach((timeBucket: any) => {
+              const d: Date = new Date(timeBucket.val);
+              const ts = d.getTime();
+              const actual = timeBucket.actual.buckets[0].val;
+              compare.push(actual);
+              actualSeries.push([actual, ts]);
+            });
+
+            compare = this.getStdDev(compare);
+            const dev = this.findCorrelation(baseline, compare);
+
+            seriesList.push({
+              target: jobIdWithPartField + ': ' + dev.toFixed(3),
+              datapoints: actualSeries,
+            });
+          });
+        }
     } else if (data.facets && data.facets.heatMapByPartFieldsFacet) {
       // Heatmap
       seriesList = [];
@@ -181,7 +243,7 @@ export class Utils {
 
         return totalA - totalB;
       });
-    } else if (format === 'rawlogs') {
+    } else if (format === 'rawlogs' || format === 'slowQueries') {
       // Table
       const columns: any[] = [];
       const rows: any[] = [];
@@ -296,6 +358,36 @@ export class Utils {
           };
         });
     }
+  }
+
+  static getStdDev(series: number[]) {
+    const min = Math.min(...series);
+    const max = Math.max(...series);
+
+    series = series.map(b => {
+      return (b - min) / (max - min);
+    });
+
+    return series;
+  }
+
+  static findCorrelation(x: any, y: any) {
+    let sumX = 0,
+      sumY = 0,
+      sumXY = 0,
+      sumX2 = 0,
+      sumY2 = 0;
+    const minLength = (x.length = y.length = Math.min(x.length, y.length)),
+      reduce = (xi: any, idx: any) => {
+        const yi = y[idx];
+        sumX += xi;
+        sumY += yi;
+        sumXY += xi * yi;
+        sumX2 += xi * xi;
+        sumY2 += yi * yi;
+      };
+    x.forEach(reduce);
+    return (minLength * sumXY - sumX * sumY) / Math.sqrt((minLength * sumX2 - sumX * sumX) * (minLength * sumY2 - sumY * sumY));
   }
 
   static queryBuilder(query: string) {

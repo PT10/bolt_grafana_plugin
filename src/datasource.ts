@@ -54,6 +54,11 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' +
       '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' +
       '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
+    correlation:
+      '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
+      '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
+      '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}',
+
   };
 
   constructor(instanceSettings: DataSourceInstanceSettings<BoltOptions>, $q: any, templateSrv: any) {
@@ -151,14 +156,19 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           fl: this.timestampField + (query.fl ? ',' + query.fl : ''),
           rows: numRows,
           start: start,
-          getRawMessages: query.queryType === 'rawlogs' || query.queryType === 'count' ? true : false,
         };
 
         // Add fields specific to raw logs and single stat on raw logs
-        if (query.queryType === 'rawlogs' || query.queryType === 'count') {
+        if (query.queryType === 'rawlogs' || query.queryType === 'count' || query.queryType === 'slowQueries') {
           solrQuery['collectionWindow'] = this.rawCollectionWindow;
           solrQuery['startTime'] = startTime;
           solrQuery['endTime'] = endTime;
+          solrQuery['getRawMessages'] = true;
+        }
+
+        if (query.queryType === 'slowQueries') {
+          solrQuery['rex.message.q'] = query.rexQuery;
+          solrQuery['rex.message.outputfields'] = query.rexOutFields;
         }
 
         // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)
@@ -275,7 +285,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       .datasourceRequest(params)
       .then((response: any) => {
         if (response.status === 200) {
-          const processedData = Utils.processResponse(response, query.queryType, this.timestampField);
+          const processedData = Utils.processResponse(response, query.queryType, this.timestampField, query.baseMetric);
           respArr.push(processedData);
 
           if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
