@@ -44,6 +44,10 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' +
       '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' +
       '"facet":{"score":"max(score_value)"}}}}}}}',
+    aggAnomalyByPartFields:
+      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' +
+      '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' +
+      '"facet":{"score":{"type":"query","q":"*:*","facet":{"score":"max(score_value)"}}}}}}}}}',
     indvAnomaly:
       '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
       '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
@@ -54,6 +58,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
       '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
       '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}',
+
   };
 
   constructor(instanceSettings: DataSourceInstanceSettings<BoltOptions>, $q: any, templateSrv: any) {
@@ -125,7 +130,11 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         if (!query.query) {
           return Promise.resolve([]);
         }
-        const q = Utils.queryBuilder(this.templateSrv.replace(query.query, options.scopedVars));
+        let q = Utils.queryBuilder(this.templateSrv.replace(query.query, options.scopedVars));
+        // Provision for empty series filter
+        if (q.match(/AND\s*$/)) {
+          q = q.slice(0, q.lastIndexOf('AND'));
+        }
         let start = this.templateSrv.replace(query.start, options.scopedVars);
         let numRows = this.templateSrv.replace(query.numRows.toString(), options.scopedVars) || 100;
 
