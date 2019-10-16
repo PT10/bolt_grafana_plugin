@@ -28,6 +28,9 @@ export interface BoltQuery extends DataQuery {
   facetQuery: string;
   sortField: string;
   sortOrder: string;
+  rexQuery: string;
+  rexOutFields: string;
+  baseMetric: string;
 }
 
 export interface BoltOptions extends DataSourceJsonData {
@@ -38,4 +41,5 @@ export interface BoltOptions extends DataSourceJsonData {
   rawCollectionType: string;
   rawCollectionWindow: number;
   timestampField: string;
+  anomalyThreshold: number;
 }
