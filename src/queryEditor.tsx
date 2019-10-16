@@ -135,8 +135,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               onChange={this.onFieldValueChange}
             ></FormField>
           </div>
-          {queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && 
-           queryType !== 'aggAnomalyByPartFields' && (
+          {queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && (
             <div className="gf-form">
               <FormField
                 label="Collection"

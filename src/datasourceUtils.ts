@@ -17,7 +17,7 @@
  */
 
 export class Utils {
-  static processResponse(response: any, format: any, timeField: string, correlationMetric?: string) {
+  static processResponse(response: any, format: any, timeField: string, anomalyThreshold: number, correlationMetric: string) {
     const data = response.data;
     let seriesList: any;
     const series: any = {};
@@ -47,7 +47,6 @@ export class Utils {
 
           const buckets = partField.timestamp.buckets;
           const actualSeries: any[] = [];
-          const expectedSeries: any[] = [];
           const scoreSeries: any[] = [];
           const anomalySeries: any[] = [];
           const expectedSeries: any[] = [];
@@ -55,11 +54,10 @@ export class Utils {
             const d: Date = new Date(timeBucket.val);
             const ts = d.getTime();
             const actual = timeBucket.actual.buckets[0].val;
-            const expected = timeBucket.expected.buckets[0].val;
             let score = timeBucket.score.buckets[0].val;
             let anomaly = timeBucket.anomaly.buckets[0].val;
             const expected = timeBucket.expected.buckets[0].val;
-            if (score >= 1 && anomaly) {
+            if (score >= anomalyThreshold && anomaly) {
               anomaly = actual;
             } else {
               anomaly = null;
@@ -150,6 +148,7 @@ export class Utils {
             });
           });
         }
+      });
     } else if (data.facets && data.facets.heatMapByPartFieldsFacet) {
       // Heatmap
       seriesList = [];

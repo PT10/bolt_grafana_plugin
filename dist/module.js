@@ -370,10 +370,14 @@ function (_super) {
     _this.rawCollection = '';
     _this.rawCollectionType = 'single';
     _this.timestampField = 'timestamp';
+    _this.anomalyThreshold = 5;
     _this.rawCollectionWindow = 1;
     _this.totalCount = undefined;
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
+      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' + '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' + '"facet":{"score":{"type":"query","q":"*:*","facet":{"score":"max(score_value)"}}}}}}}}}',
+      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
+      correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
     _this.$q = $q;
     _this.templateSrv = templateSrv;
@@ -391,6 +395,7 @@ function (_super) {
       _this.timestampField = instanceSettings.jsonData.timestampField;
       _this.rawCollectionType = instanceSettings.jsonData.rawCollectionType;
       _this.rawCollectionWindow = instanceSettings.jsonData.rawCollectionWindow;
+      _this.anomalyThreshold = instanceSettings.jsonData.anomalyThreshold;
     }
 
     _this.backendSrv = Object(_grafana_runtime__WEBPACK_IMPORTED_MODULE_2__["getBackendSrv"])();
@@ -585,7 +590,7 @@ function (_super) {
 
     return this.backendSrv.datasourceRequest(params).then(function (response) {
       if (response.status === 200) {
-        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, query.baseMetric);
+        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric);
         respArr.push(processedData);
 
         if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
@@ -750,7 +755,7 @@ var Utils =
 function () {
   function Utils() {}
 
-  Utils.processResponse = function (response, format, timeField, correlationMetric) {
+  Utils.processResponse = function (response, format, timeField, anomalyThreshold, correlationMetric) {
     var _this = this;
 
     var data = response.data;
@@ -762,12 +767,11 @@ function () {
       var jobs = data.facets.lineChartFacet.buckets;
       var multiJobQuery_1 = jobs.length > 1;
       jobs.forEach(function (job) {
-
+        var jobId = multiJobQuery_1 ? job.val : '';
         var partFields = job.group.buckets;
         partFields.forEach(function (partField) {
           var jobIdWithPartField = jobId;
           var partFieldJson = JSON.parse(partField.val);
-
           Object.keys(partFieldJson).forEach(function (key) {
             if (key === 'aggr_field') {
               return;
@@ -783,7 +787,6 @@ function () {
 
           var buckets = partField.timestamp.buckets;
           var actualSeries = [];
-          var expectedSeries = [];
           var scoreSeries = [];
           var anomalySeries = [];
           var expectedSeries = [];
@@ -791,12 +794,11 @@ function () {
             var d = new Date(timeBucket.val);
             var ts = d.getTime();
             var actual = timeBucket.actual.buckets[0].val;
-            var expected = timeBucket.expected.buckets[0].val;
             var score = timeBucket.score.buckets[0].val;
             var anomaly = timeBucket.anomaly.buckets[0].val;
             var expected = timeBucket.expected.buckets[0].val;
 
-            if (score >= 1 && anomaly) {
+            if (score >= anomalyThreshold && anomaly) {
               anomaly = actual;
             } else {
               anomaly = null;
@@ -826,7 +828,6 @@ function () {
           });
         });
       });
-
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       var jobs = data.facets.correlation.buckets;
@@ -882,6 +883,7 @@ function () {
             });
           });
         }
+      });
     } else if (data.facets && data.facets.heatMapByPartFieldsFacet) {
       // Heatmap
       seriesList = [];
@@ -1344,6 +1346,7 @@ function (_super) {
       width: 4,
       name: "query",
       onChange: this.onFieldValueChange
+    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Collection",

@@ -1,8 +1,7 @@
 {
   "type": "datasource",
   "name": "Bolt",
-  "id": "boltanalytics-Solr-datasource",
-
+  "id": "boltanalytics-solr-datasource",
   "metrics": true,
 
   "info": {
@@ -21,8 +20,7 @@
     ],
     "screenshots": [],
     "version": "1.0.0",
-    "updated": "2019-10-14"
-
+    "updated": "2019-10-15"
   },
 
   "dependencies": {

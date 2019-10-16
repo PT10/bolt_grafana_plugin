@@ -31,6 +31,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   rawCollection = '';
   rawCollectionType = 'single';
   timestampField = 'timestamp';
+  anomalyThreshold = 5;
   rawCollectionWindow = 1;
   backendSrv: any;
   qTemp: any;
@@ -58,7 +59,6 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
       '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
       '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}',
-
   };
 
   constructor(instanceSettings: DataSourceInstanceSettings<BoltOptions>, $q: any, templateSrv: any) {
@@ -80,6 +80,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       this.timestampField = instanceSettings.jsonData.timestampField;
       this.rawCollectionType = instanceSettings.jsonData.rawCollectionType;
       this.rawCollectionWindow = instanceSettings.jsonData.rawCollectionWindow;
+      this.anomalyThreshold = instanceSettings.jsonData.anomalyThreshold;
     }
 
     this.backendSrv = getBackendSrv();
@@ -285,7 +286,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       .datasourceRequest(params)
       .then((response: any) => {
         if (response.status === 200) {
-          const processedData = Utils.processResponse(response, query.queryType, this.timestampField, query.baseMetric);
+          const processedData = Utils.processResponse(response, query.queryType, this.timestampField, this.anomalyThreshold, query.baseMetric);
           respArr.push(processedData);
 
           if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {

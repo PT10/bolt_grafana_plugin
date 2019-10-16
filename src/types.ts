@@ -41,4 +41,5 @@ export interface BoltOptions extends DataSourceJsonData {
   rawCollectionType: string;
   rawCollectionWindow: number;
   timestampField: string;
+  anomalyThreshold: number;
 }
