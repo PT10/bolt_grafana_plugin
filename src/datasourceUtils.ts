@@ -189,22 +189,7 @@ export class Utils {
         });
       });
 
-      seriesList.sort((a: any, b: any) => {
-        let totalA = 0;
-        let totalB = 0;
-        if (a.datapoints && b.datapoints) {
-          a.datapoints.map((d: any) => {
-            totalA += d[0];
-          });
-          b.datapoints.map((d: any) => {
-            totalB += d[0];
-          });
-        } else {
-          return 0;
-        }
-
-        return totalA - totalB;
-      });
+      this.sortList(seriesList, 10);
     } else if (data.facets && data.facets.heatMapFacet) {
       // Heatmap
       seriesList = [];
@@ -226,22 +211,7 @@ export class Utils {
         });
       });
 
-      seriesList.sort((a: any, b: any) => {
-        let totalA = 0;
-        let totalB = 0;
-        if (a.datapoints && b.datapoints) {
-          a.datapoints.map((d: any) => {
-            totalA += d[0];
-          });
-          b.datapoints.map((d: any) => {
-            totalB += d[0];
-          });
-        } else {
-          return 0;
-        }
-
-        return totalA - totalB;
-      });
+      this.sortList(seriesList);
     } else if (format === 'rawlogs' || format === 'slowQueries') {
       // Table
       const columns: any[] = [];
@@ -356,6 +326,29 @@ export class Utils {
             value: field,
           };
         });
+    }
+  }
+
+  static sortList(seriesList: any[], top?: number) {
+    seriesList.sort((a: any, b: any) => {
+      let totalA = 0;
+      let totalB = 0;
+      if (a.datapoints && b.datapoints) {
+        a.datapoints.map((d: any) => {
+          totalA += d[0];
+        });
+        b.datapoints.map((d: any) => {
+          totalB += d[0];
+        });
+      } else {
+        return 0;
+      }
+
+      return totalA - totalB;
+    });
+
+    if (top) {
+      seriesList = seriesList.slice(0, top);
     }
   }
 

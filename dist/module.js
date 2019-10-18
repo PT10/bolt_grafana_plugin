@@ -375,7 +375,7 @@ function (_super) {
     _this.totalCount = undefined;
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
-      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' + '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' + '"facet":{"score":{"type":"query","q":"*:*","facet":{"score":"max(score_value)"}}}}}}}}}',
+      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":1000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' + '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' + '"facet":{"score":{"type":"query","q":"*:*","facet":{"score":"max(score_value)"}}}}}}}}}',
       indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
       correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
@@ -925,23 +925,7 @@ function () {
           });
         });
       });
-      seriesList.sort(function (a, b) {
-        var totalA = 0;
-        var totalB = 0;
-
-        if (a.datapoints && b.datapoints) {
-          a.datapoints.map(function (d) {
-            totalA += d[0];
-          });
-          b.datapoints.map(function (d) {
-            totalB += d[0];
-          });
-        } else {
-          return 0;
-        }
-
-        return totalA - totalB;
-      });
+      this.sortList(seriesList, 10);
     } else if (data.facets && data.facets.heatMapFacet) {
       // Heatmap
       seriesList = [];
@@ -963,23 +947,7 @@ function () {
           datapoints: seriesData
         });
       });
-      seriesList.sort(function (a, b) {
-        var totalA = 0;
-        var totalB = 0;
-
-        if (a.datapoints && b.datapoints) {
-          a.datapoints.map(function (d) {
-            totalA += d[0];
-          });
-          b.datapoints.map(function (d) {
-            totalB += d[0];
-          });
-        } else {
-          return 0;
-        }
-
-        return totalA - totalB;
-      });
+      this.sortList(seriesList);
     } else if (format === 'rawlogs' || format === 'slowQueries') {
       // Table
       var columns_1 = [];
@@ -1108,6 +1076,30 @@ function () {
           value: field
         };
       });
+    }
+  };
+
+  Utils.sortList = function (seriesList, top) {
+    seriesList.sort(function (a, b) {
+      var totalA = 0;
+      var totalB = 0;
+
+      if (a.datapoints && b.datapoints) {
+        a.datapoints.map(function (d) {
+          totalA += d[0];
+        });
+        b.datapoints.map(function (d) {
+          totalB += d[0];
+        });
+      } else {
+        return 0;
+      }
+
+      return totalA - totalB;
+    });
+
+    if (top) {
+      seriesList = seriesList.slice(0, top);
     }
   };
 
