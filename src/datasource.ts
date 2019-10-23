@@ -28,27 +28,31 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   data: DataFrame[] = [];
   baseUrl: any = '';
   anCollection = '';
+  jobConfigCollection = '';
   rawCollection = '';
   rawCollectionType = 'single';
   timestampField = 'timestamp';
   anomalyThreshold = 5;
+  topN = 10;
   rawCollectionWindow = 1;
   backendSrv: any;
   qTemp: any;
   $q: any;
   templateSrv: any;
 
+  jobIdMappings: { dashboards: any; panels: any };
+
   totalCount?: number = undefined;
 
   facets: any = {
     aggAnomaly:
       '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' +
-      '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' +
-      '"facet":{"score":"max(score_value)"}}}}}}}',
+      '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query",' +
+      '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
     aggAnomalyByPartFields:
-      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' +
+      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":1000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' +
       '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' +
-      '"facet":{"score":{"type":"query","q":"*:*","facet":{"score":"max(score_value)"}}}}}}}}}',
+      '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
     indvAnomaly:
       '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
       '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
@@ -64,6 +68,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   constructor(instanceSettings: DataSourceInstanceSettings<BoltOptions>, $q: any, templateSrv: any) {
     super(instanceSettings);
 
+    this.jobIdMappings = { dashboards: {}, panels: {} };
     this.$q = $q;
     this.templateSrv = templateSrv;
 
@@ -76,14 +81,24 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
     if (instanceSettings.jsonData) {
       this.anCollection = instanceSettings.jsonData.anCollection;
+      this.jobConfigCollection = instanceSettings.jsonData.jobConfigCollection;
       this.rawCollection = instanceSettings.jsonData.rawCollection;
       this.timestampField = instanceSettings.jsonData.timestampField;
       this.rawCollectionType = instanceSettings.jsonData.rawCollectionType;
       this.rawCollectionWindow = instanceSettings.jsonData.rawCollectionWindow;
-      this.anomalyThreshold = instanceSettings.jsonData.anomalyThreshold;
+
+      if (instanceSettings.jsonData.anomalyThreshold) {
+        this.anomalyThreshold = instanceSettings.jsonData.anomalyThreshold;
+      }
+
+      if (instanceSettings.jsonData.topN) {
+        this.topN = parseInt(instanceSettings.jsonData.topN, 10);
+      }
     }
 
     this.backendSrv = getBackendSrv();
+
+    this.buildValuesMap();
   }
 
   metricFindQuery(query: string) {
@@ -92,19 +107,19 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     }
 
     const pattern1 = /^getPageCount\(\$(.*),\s*\$(.*)\)$/;
-    const pattern2 = /^(.*)\((.*)\)$/;
+    const pattern2 = /^(.*)\((.*):\s*(.*),\s*(.*)\)$/;
 
     const matches1: any = query.match(pattern1);
     const matches2: any = query.match(pattern2);
 
     if (matches1 && matches1.length === 3) {
       return this.getTotalCount(matches1);
-    } else if (matches2 && matches2.length === 3) {
+    } else if (matches2 && matches2.length === 5) {
       return this.getFields(matches2);
     } else {
       return Promise.reject({
         status: 'error',
-        message: 'Supported options are: <collection_name>(<field_name>) and getPageCount($PageSize, $Search)',
+        message: 'Supported options are: <collection_name>(<filter>,<field_name>) and getPageCount($PageSize, $Search)',
         title: 'Error while adding the variable',
       });
     }
@@ -131,11 +146,84 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         if (!query.query) {
           return Promise.resolve([]);
         }
-        let q = Utils.queryBuilder(this.templateSrv.replace(query.query, options.scopedVars));
+        let q: string;
+        const queryStr = this.templateSrv.replace(query.query, options.scopedVars);
+        const matches = queryStr.match(/__dashboard__:\s*(.*)/);
+        let matches2 = queryStr.match(/__panel__:\s*(.*) AND .*/);
+        if (!matches2) {
+          matches2 = queryStr.match(/__panel__:\s*(.*)/);
+        }
+        if (matches && matches.length === 2) {
+          const dahsboardName: string = matches[1];
+          if (dahsboardName.startsWith('{')) {
+            // All option
+            const jobIdList: any[] = [];
+            const dashboards = dahsboardName
+              .replace('{', '')
+              .replace('}', '')
+              .split(',');
+
+            dashboards.forEach(dashboard => {
+              const jobId: string[] = Object.keys(this.jobIdMappings.dashboards).filter(jobId => {
+                return this.jobIdMappings.dashboards[jobId] === dashboard;
+              });
+
+              if (jobId) {
+                jobId.forEach(job => jobIdList.push(job));
+              }
+            });
+
+            const jobIdStr = '(' + jobIdList.join(' OR ') + ')';
+            q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
+          } else {
+            // particular option
+            const jobIdList: string[] = Object.keys(this.jobIdMappings.dashboards).filter((jobId: string) => {
+              return this.jobIdMappings.dashboards[jobId] === dahsboardName;
+            });
+
+            const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
+            q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
+          }
+        } else if (matches2 && matches2.length === 2) {
+          const panelName: string = matches2[1];
+          if (panelName.startsWith('{')) {
+            // All option
+            const jobIdList: any[] = [];
+            const panels = panelName
+              .replace('{', '')
+              .replace('}', '')
+              .split(',');
+
+            panels.forEach(panel => {
+              const jobId = Object.keys(this.jobIdMappings.panels).filter(jobId => {
+                return this.jobIdMappings.panels[jobId] === panel;
+              });
+
+              if (jobId) {
+                jobIdList.push(jobId);
+              }
+            });
+
+            const jobIdStr = '(' + jobIdList.join(' OR ') + ')';
+            q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
+          } else {
+            // particular option
+            const jobIdList: string[] = Object.keys(this.jobIdMappings.panels).filter((jobId: string) => {
+              return this.jobIdMappings.panels[jobId] === panelName;
+            });
+
+            const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
+            q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
+          }
+        } else {
+          q = Utils.queryBuilder(queryStr);
+        }
+
         // Provision for empty series filter
         if (q.match(/AND\s*$/)) {
           q = q.slice(0, q.lastIndexOf('AND'));
         }
+
         let start = this.templateSrv.replace(query.start, options.scopedVars);
         let numRows = this.templateSrv.replace(query.numRows.toString(), options.scopedVars) || 100;
 
@@ -173,14 +261,17 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         }
 
         // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)
-        // TODO: Find out why numFounf is returned only after specifying the facet
+        // TODO: Find out why numFound is returned only after specifying the facet
         if (query.queryType === 'count' && this.rawCollectionType === 'multi') {
           solrQuery['facet'] = true;
           solrQuery['facet.field'] = 'id';
           solrQuery['facet.limit'] = 2;
         } else if (_.keys(this.facets).includes(query.queryType)) {
           solrQuery['facet'] = true;
-          solrQuery['json.facet'] = this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime);
+          solrQuery['json.facet'] = this.facets[query.queryType]
+            .replace('__START_TIME__', startTime)
+            .replace('__END_TIME__', endTime)
+            .replace('__SCORE_THRESHOLD__', this.anomalyThreshold);
         } else {
           delete solrQuery['facet'];
           delete solrQuery['json.facet'];
@@ -286,7 +377,19 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       .datasourceRequest(params)
       .then((response: any) => {
         if (response.status === 200) {
-          const processedData = Utils.processResponse(response, query.queryType, this.timestampField, this.anomalyThreshold, query.baseMetric);
+          const groupMap = this.jobIdMappings;
+
+          const processedData = Utils.processResponse(
+            response,
+            query.queryType,
+            this.timestampField,
+            this.anomalyThreshold,
+            query.baseMetric,
+            groupMap,
+            JSON.parse(query.groupEnabled),
+            this.topN
+          );
+
           respArr.push(processedData);
 
           if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
@@ -317,9 +420,31 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
   getFields(matches: any) {
     const collection = matches[1];
-    const field = matches[2];
+    const filterField = matches[2];
+    let filterFieldVal = matches[3].replace('$', '');
+    const field = matches[4];
 
-    const url = this.baseUrl + '/' + collection + '/select?q=*:*&facet=true&facet.field=' + field + '&wt=json&rows=0';
+    const variable = this.templateSrv.variables.find((v: any) => v.name === filterFieldVal);
+    if (variable) {
+      let dashboards: string[] = [];
+      if (typeof variable.current.value !== 'object') {
+        dashboards.push(variable.current.value);
+      } else {
+        dashboards = variable.current.value;
+      }
+
+      if (dashboards[0] === '$__all') {
+        filterFieldVal = '*';
+      } else {
+        dashboards = dashboards.map(dashboard => {
+          return encodeURI('"' + dashboard + '"');
+        });
+        filterFieldVal = '(' + dashboards.join(' OR ') + ')';
+      }
+    }
+
+    const url =
+      this.baseUrl + '/' + collection + '/select?q=' + filterField + ': ' + filterFieldVal + '&facet=true&facet.field=' + field + '&wt=json&rows=0';
     const params = {
       url: url,
       method: 'GET',
@@ -336,6 +461,27 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           },
         ]);
       }
+    });
+  }
+
+  buildValuesMap() {
+    const url = this.baseUrl + '/' + this.jobConfigCollection + '/select?q=jobId:*&fl=jobId,name,searchGroup&rows=10000';
+    const params = {
+      url: url,
+      method: 'GET',
+    };
+    return this.backendSrv.datasourceRequest(params).then((response: any) => {
+      if (response.status === 200) {
+        this.buildJobIdMap(response.data.response.docs);
+      }
+    });
+  }
+
+  buildJobIdMap(docs: any[]) {
+    this.jobIdMappings = { dashboards: {}, panels: {} };
+    docs.forEach(doc => {
+      this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
+      this.jobIdMappings.panels[doc.jobId] = doc.name;
     });
   }
 

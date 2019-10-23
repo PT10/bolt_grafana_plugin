@@ -56,6 +56,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
           'params=\\{(.*)\\}\\s*.*hits=(.*)\\s*status.*QTime=(.*)',
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
       baseMetric: query.baseMetric,
+      groupEnabled: query.groupEnabled || 'false',
     };
 
     const { onChange } = this.props;
@@ -104,11 +105,12 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         value: 'correlation',
       },
     ];
-    const { query, collection, fl, queryType, numRows, start, sortField, sortOrder, rexQuery, rexOutFields, baseMetric } = this.state;
+    const { query, collection, fl, queryType, numRows, start, sortField, sortOrder, rexQuery, rexOutFields, baseMetric, groupEnabled } = this.state;
     const labelWidth = 8;
 
     return (
       <div>
+        {/* First row starts */}
         <div className="gf-form-inline">
           <div className="gf-form">
             <FormLabel width={labelWidth}>Type</FormLabel>
@@ -135,6 +137,22 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               onChange={this.onFieldValueChange}
             ></FormField>
           </div>
+          {/* Show group by infor for aggregated anomalies */}
+          {queryType === 'aggAnomaly' && (
+            <div className="gf-form">
+              <FormLabel width={labelWidth}>Group Results</FormLabel>
+              <select
+                value={groupEnabled}
+                onChange={(event: any) => {
+                  this.onFieldValueChange(event, 'groupEnabled');
+                }}
+              >
+                <option value={'true'}>{'true'}</option>
+                <option value={'false'}>{'false'}</option>
+              </select>
+            </div>
+          )}
+          {/* Show collection name textbox */}
           {queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && (
             <div className="gf-form">
               <FormField
@@ -148,6 +166,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               ></FormField>
             </div>
           )}
+          {/* Show base metric for correlation */}
           {queryType === 'correlation' && (
             <div className="gf-form">
               <FormField
@@ -161,7 +180,9 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               ></FormField>
             </div>
           )}
+          {/* First row ends */}
         </div>
+        {/* Seconds row starts */}
         {(queryType === 'chart' || queryType === 'rawlogs' || queryType === 'slowQueries') && (
           <div className="gf-form-inline">
             {(queryType === 'rawlogs' || queryType === 'slowQueries') && (

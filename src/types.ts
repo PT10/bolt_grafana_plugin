@@ -31,15 +31,18 @@ export interface BoltQuery extends DataQuery {
   rexQuery: string;
   rexOutFields: string;
   baseMetric: string;
+  groupEnabled: string;
 }
 
 export interface BoltOptions extends DataSourceJsonData {
   // Saved in the datasource
   url: string;
   anCollection: string;
+  jobConfigCollection: string;
   rawCollection: string;
   rawCollectionType: string;
   rawCollectionWindow: number;
   timestampField: string;
   anomalyThreshold: number;
+  topN: string;
 }
