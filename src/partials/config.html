@@ -39,6 +39,20 @@
       </div>
       <div class="gf-form-inline">
         <div class="gf-form max-width-30">
+          <span class="gf-form-label width-16">Job Config collection</span>
+          <input
+            class="gf-form-input ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required"
+            type="text"
+            min-length="0"
+            data-provide="typeahead"
+            name="jobConfigCollection"
+            ng-model=ctrl.current.jsonData.jobConfigCollection
+            required
+          />
+        </div>
+      </div>
+      <div class="gf-form-inline">
+        <div class="gf-form max-width-30">
           <span class="gf-form-label width-16">Raw Logs collection</span>
           <input
             class="gf-form-input ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required"
@@ -94,6 +108,18 @@
             data-provide="typeahead"
             name="anomalyThreshold"
             ng-model=ctrl.current.jsonData.anomalyThreshold
+            required
+          />
+        </div>
+        <div class="gf-form max-width-30">
+          <span class="gf-form-label width-16">Top N series</span>
+          <input
+            class="gf-form-input ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required"
+            type="text"
+            min-length="0"
+            data-provide="typeahead"
+            name="topN"
+            ng-model=ctrl.current.jsonData.topN
             required
           />
         </div>

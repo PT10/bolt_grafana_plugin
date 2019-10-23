@@ -333,6 +333,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var datasourceUtils__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! datasourceUtils */ "./datasourceUtils.ts");
 /* harmony import */ var lodash__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! lodash */ "lodash");
 /* harmony import */ var lodash__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(lodash__WEBPACK_IMPORTED_MODULE_4__);
+function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
 /*
  *
  *  Copyright (C) 2019 Bolt Analytics Corporation
@@ -367,17 +369,23 @@ function (_super) {
     _this.data = [];
     _this.baseUrl = '';
     _this.anCollection = '';
+    _this.jobConfigCollection = '';
     _this.rawCollection = '';
     _this.rawCollectionType = 'single';
     _this.timestampField = 'timestamp';
     _this.anomalyThreshold = 5;
+    _this.topN = 10;
     _this.rawCollectionWindow = 1;
     _this.totalCount = undefined;
     _this.facets = {
-      aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query","q":"*:*",' + '"facet":{"score":"max(score_value)"}}}}}}}',
-      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":1000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' + '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' + '"facet":{"score":{"type":"query","q":"*:*","facet":{"score":"max(score_value)"}}}}}}}}}',
+      aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query",' + '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
+      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":1000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' + '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' + '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
       indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
       correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
+    };
+    _this.jobIdMappings = {
+      dashboards: {},
+      panels: {}
     };
     _this.$q = $q;
     _this.templateSrv = templateSrv;
@@ -391,14 +399,25 @@ function (_super) {
 
     if (instanceSettings.jsonData) {
       _this.anCollection = instanceSettings.jsonData.anCollection;
+      _this.jobConfigCollection = instanceSettings.jsonData.jobConfigCollection;
       _this.rawCollection = instanceSettings.jsonData.rawCollection;
       _this.timestampField = instanceSettings.jsonData.timestampField;
       _this.rawCollectionType = instanceSettings.jsonData.rawCollectionType;
       _this.rawCollectionWindow = instanceSettings.jsonData.rawCollectionWindow;
-      _this.anomalyThreshold = instanceSettings.jsonData.anomalyThreshold;
+
+      if (instanceSettings.jsonData.anomalyThreshold) {
+        _this.anomalyThreshold = instanceSettings.jsonData.anomalyThreshold;
+      }
+
+      if (instanceSettings.jsonData.topN) {
+        _this.topN = parseInt(instanceSettings.jsonData.topN, 10);
+      }
     }
 
     _this.backendSrv = Object(_grafana_runtime__WEBPACK_IMPORTED_MODULE_2__["getBackendSrv"])();
+
+    _this.buildValuesMap();
+
     return _this;
   }
 
@@ -408,18 +427,18 @@ function (_super) {
     }
 
     var pattern1 = /^getPageCount\(\$(.*),\s*\$(.*)\)$/;
-    var pattern2 = /^(.*)\((.*)\)$/;
+    var pattern2 = /^(.*)\((.*):\s*(.*),\s*(.*)\)$/;
     var matches1 = query.match(pattern1);
     var matches2 = query.match(pattern2);
 
     if (matches1 && matches1.length === 3) {
       return this.getTotalCount(matches1);
-    } else if (matches2 && matches2.length === 3) {
+    } else if (matches2 && matches2.length === 5) {
       return this.getFields(matches2);
     } else {
       return Promise.reject({
         status: 'error',
-        message: 'Supported options are: <collection_name>(<field_name>) and getPageCount($PageSize, $Search)',
+        message: 'Supported options are: <collection_name>(<filter>,<field_name>) and getPageCount($PageSize, $Search)',
         title: 'Error while adding the variable'
       });
     }
@@ -445,7 +464,75 @@ function (_super) {
         return Promise.resolve([]);
       }
 
-      var q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(_this.templateSrv.replace(query.query, options.scopedVars)); // Provision for empty series filter
+      var q;
+
+      var queryStr = _this.templateSrv.replace(query.query, options.scopedVars);
+
+      var matches = queryStr.match(/__dashboard__:\s*(.*)/);
+      var matches2 = queryStr.match(/__panel__:\s*(.*) AND .*/);
+
+      if (!matches2) {
+        matches2 = queryStr.match(/__panel__:\s*(.*)/);
+      }
+
+      if (matches && matches.length === 2) {
+        var dahsboardName_1 = matches[1];
+
+        if (dahsboardName_1.startsWith('{')) {
+          // All option
+          var jobIdList_1 = [];
+          var dashboards = dahsboardName_1.replace('{', '').replace('}', '').split(',');
+          dashboards.forEach(function (dashboard) {
+            var jobId = Object.keys(_this.jobIdMappings.dashboards).filter(function (jobId) {
+              return _this.jobIdMappings.dashboards[jobId] === dashboard;
+            });
+
+            if (jobId) {
+              jobId.forEach(function (job) {
+                return jobIdList_1.push(job);
+              });
+            }
+          });
+          var jobIdStr = '(' + jobIdList_1.join(' OR ') + ')';
+          q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
+        } else {
+          // particular option
+          var jobIdList = Object.keys(_this.jobIdMappings.dashboards).filter(function (jobId) {
+            return _this.jobIdMappings.dashboards[jobId] === dahsboardName_1;
+          });
+          var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
+          q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
+        }
+      } else if (matches2 && matches2.length === 2) {
+        var panelName_1 = matches2[1];
+
+        if (panelName_1.startsWith('{')) {
+          // All option
+          var jobIdList_2 = [];
+          var panels = panelName_1.replace('{', '').replace('}', '').split(',');
+          panels.forEach(function (panel) {
+            var jobId = Object.keys(_this.jobIdMappings.panels).filter(function (jobId) {
+              return _this.jobIdMappings.panels[jobId] === panel;
+            });
+
+            if (jobId) {
+              jobIdList_2.push(jobId);
+            }
+          });
+          var jobIdStr = '(' + jobIdList_2.join(' OR ') + ')';
+          q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
+        } else {
+          // particular option
+          var jobIdList = Object.keys(_this.jobIdMappings.panels).filter(function (jobId) {
+            return _this.jobIdMappings.panels[jobId] === panelName_1;
+          });
+          var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
+          q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
+        }
+      } else {
+        q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(queryStr);
+      } // Provision for empty series filter
+
 
       if (q.match(/AND\s*$/)) {
         q = q.slice(0, q.lastIndexOf('AND'));
@@ -485,7 +572,7 @@ function (_super) {
         solrQuery['rex.message.q'] = query.rexQuery;
         solrQuery['rex.message.outputfields'] = query.rexOutFields;
       } // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)
-      // TODO: Find out why numFounf is returned only after specifying the facet
+      // TODO: Find out why numFound is returned only after specifying the facet
 
 
       if (query.queryType === 'count' && _this.rawCollectionType === 'multi') {
@@ -494,7 +581,7 @@ function (_super) {
         solrQuery['facet.limit'] = 2;
       } else if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
         solrQuery['facet'] = true;
-        solrQuery['json.facet'] = _this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime);
+        solrQuery['json.facet'] = _this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime).replace('__SCORE_THRESHOLD__', _this.anomalyThreshold);
       } else {
         delete solrQuery['facet'];
         delete solrQuery['json.facet'];
@@ -590,7 +677,8 @@ function (_super) {
 
     return this.backendSrv.datasourceRequest(params).then(function (response) {
       if (response.status === 200) {
-        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric);
+        var groupMap = _this.jobIdMappings;
+        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric, groupMap, JSON.parse(query.groupEnabled), _this.topN);
         respArr.push(processedData);
 
         if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
@@ -616,8 +704,33 @@ function (_super) {
 
   BoltDatasource.prototype.getFields = function (matches) {
     var collection = matches[1];
-    var field = matches[2];
-    var url = this.baseUrl + '/' + collection + '/select?q=*:*&facet=true&facet.field=' + field + '&wt=json&rows=0';
+    var filterField = matches[2];
+    var filterFieldVal = matches[3].replace('$', '');
+    var field = matches[4];
+    var variable = this.templateSrv.variables.find(function (v) {
+      return v.name === filterFieldVal;
+    });
+
+    if (variable) {
+      var dashboards = [];
+
+      if (_typeof(variable.current.value) !== 'object') {
+        dashboards.push(variable.current.value);
+      } else {
+        dashboards = variable.current.value;
+      }
+
+      if (dashboards[0] === '$__all') {
+        filterFieldVal = '*';
+      } else {
+        dashboards = dashboards.map(function (dashboard) {
+          return encodeURI('"' + dashboard + '"');
+        });
+        filterFieldVal = '(' + dashboards.join(' OR ') + ')';
+      }
+    }
+
+    var url = this.baseUrl + '/' + collection + '/select?q=' + filterField + ': ' + filterFieldVal + '&facet=true&facet.field=' + field + '&wt=json&rows=0';
     var params = {
       url: url,
       method: 'GET'
@@ -632,6 +745,34 @@ function (_super) {
           title: 'Error'
         }]);
       }
+    });
+  };
+
+  BoltDatasource.prototype.buildValuesMap = function () {
+    var _this = this;
+
+    var url = this.baseUrl + '/' + this.jobConfigCollection + '/select?q=jobId:*&fl=jobId,name,searchGroup&rows=10000';
+    var params = {
+      url: url,
+      method: 'GET'
+    };
+    return this.backendSrv.datasourceRequest(params).then(function (response) {
+      if (response.status === 200) {
+        _this.buildJobIdMap(response.data.response.docs);
+      }
+    });
+  };
+
+  BoltDatasource.prototype.buildJobIdMap = function (docs) {
+    var _this = this;
+
+    this.jobIdMappings = {
+      dashboards: {},
+      panels: {}
+    };
+    docs.forEach(function (doc) {
+      _this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
+      _this.jobIdMappings.panels[doc.jobId] = doc.name;
     });
   };
 
@@ -755,7 +896,7 @@ var Utils =
 function () {
   function Utils() {}
 
-  Utils.processResponse = function (response, format, timeField, anomalyThreshold, correlationMetric) {
+  Utils.processResponse = function (response, format, timeField, anomalyThreshold, correlationMetric, groupMap, grouppingEmabled, topN) {
     var _this = this;
 
     var data = response.data;
@@ -765,12 +906,10 @@ function () {
     if (data.facets && data.facets.lineChartFacet) {
       seriesList = [];
       var jobs = data.facets.lineChartFacet.buckets;
-      var multiJobQuery_1 = jobs.length > 1;
       jobs.forEach(function (job) {
-        var jobId = multiJobQuery_1 ? job.val : '';
         var partFields = job.group.buckets;
         partFields.forEach(function (partField) {
-          var jobIdWithPartField = jobId;
+          var jobIdWithPartField = groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val];
           var partFieldJson = JSON.parse(partField.val);
           Object.keys(partFieldJson).forEach(function (key) {
             if (key === 'aggr_field') {
@@ -855,7 +994,7 @@ function () {
           });
         }
       });
-      baseline_1 = this.getStdDev(baseline_1); // Populate other metrics and find deviation from baseline
+      baseline_1 = Utils.getStdDev(baseline_1); // Populate other metrics and find deviation from baseline
 
       jobs.forEach(function (job) {
         if (job.val !== correlationMetric) {
@@ -873,7 +1012,7 @@ function () {
               compare.push(actual);
               actualSeries.push([actual, ts]);
             });
-            compare = _this.getStdDev(compare);
+            compare = Utils.getStdDev(compare);
 
             var dev = _this.findCorrelation(baseline_1, compare);
 
@@ -888,7 +1027,6 @@ function () {
       // Heatmap
       seriesList = [];
       var jobs = data.facets.heatMapByPartFieldsFacet.buckets;
-      var multiJobQuery_2 = jobs.length > 1;
       jobs.forEach(function (job) {
         var partBuckets = job.partField.buckets;
         partBuckets.forEach(function (partField) {
@@ -905,7 +1043,7 @@ function () {
           }); // Derive series name from part fields
 
           var partFieldJson = JSON.parse(partField.val);
-          var seriesName = multiJobQuery_2 ? job.val : '';
+          var seriesName = groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val];
           Object.keys(partFieldJson).forEach(function (key) {
             if (key === 'aggr_field') {
               return;
@@ -925,7 +1063,7 @@ function () {
           });
         });
       });
-      this.sortList(seriesList, 10);
+      seriesList = this.sortList(seriesList, topN).reverse(); // reverse because heatmap starts from bottom
     } else if (data.facets && data.facets.heatMapFacet) {
       // Heatmap
       seriesList = [];
@@ -943,11 +1081,17 @@ function () {
           }
         });
         seriesList.push({
-          target: job.val,
+          jobId: job.val,
+          target: groupMap.panels[job.val],
           datapoints: seriesData
         });
       });
-      this.sortList(seriesList);
+
+      if (grouppingEmabled) {
+        seriesList = Utils.getGrouppedResults(seriesList, groupMap);
+      }
+
+      seriesList = this.sortList(seriesList).reverse(); // reverse because heatmap starts from bottom
     } else if (format === 'rawlogs' || format === 'slowQueries') {
       // Table
       var columns_1 = [];
@@ -1039,6 +1183,37 @@ function () {
     };
   };
 
+  Utils.getGrouppedResults = function (seriesList, groupMap) {
+    var groupSeriesList = {};
+    var seriesListOutput = [];
+    seriesList.forEach(function (series) {
+      var jobId = series.jobId;
+      var datapoints = series.datapoints;
+      var dashboardName = groupMap.dashboards[jobId];
+
+      if (!dashboardName) {
+        return;
+      }
+
+      if (!groupSeriesList[dashboardName]) {
+        groupSeriesList[dashboardName] = [];
+      }
+
+      datapoints.forEach(function (data, index) {
+        if (!groupSeriesList[dashboardName][index] || groupSeriesList[dashboardName][index] < data) {
+          groupSeriesList[dashboardName][index] = data;
+        }
+      });
+    });
+    Object.keys(groupSeriesList).forEach(function (dashboard) {
+      seriesListOutput.push({
+        target: dashboard,
+        datapoints: groupSeriesList[dashboard]
+      });
+    });
+    return seriesListOutput;
+  };
+
   Utils.mapToTextValue = function (result) {
     if (result.data && result.data.collections) {
       return result.data.collections.map(function (collection) {
@@ -1058,10 +1233,12 @@ function () {
 
           for (var i = 0; i < array.length; i += 2) {
             // take every second element
-            ar.push({
-              text: array[i],
-              expandable: false
-            });
+            if (array[i + 1] > 0) {
+              ar.push({
+                text: array[i],
+                expandable: false
+              });
+            }
           }
         }
       }
@@ -1095,12 +1272,14 @@ function () {
         return 0;
       }
 
-      return totalA - totalB;
+      return totalB - totalA;
     });
 
     if (top) {
       seriesList = seriesList.slice(0, top);
     }
+
+    return seriesList;
   };
 
   Utils.getStdDev = function (series) {
@@ -1264,7 +1443,8 @@ function (_super) {
       sortOrder: query.sortOrder,
       rexQuery: query.rexQuery || '\\s*.*\\s*\\[c\\:(.*)\\ss\\:(.*)\\sr\\:(.*)\\sx\\:(.*)\\]\\s*o.a.s.c.S.SlowRequest.*path=(.*)\\s*' + 'params=\\{(.*)\\}\\s*.*hits=(.*)\\s*status.*QTime=(.*)',
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
-      baseMetric: query.baseMetric
+      baseMetric: query.baseMetric,
+      groupEnabled: query.groupEnabled || 'false'
     });
     var onChange = _this.props.onChange;
     onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, _this.state));
@@ -1310,7 +1490,8 @@ function (_super) {
         sortOrder = _a.sortOrder,
         rexQuery = _a.rexQuery,
         rexOutFields = _a.rexOutFields,
-        baseMetric = _a.baseMetric;
+        baseMetric = _a.baseMetric,
+        groupEnabled = _a.groupEnabled;
     var labelWidth = 8;
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
@@ -1338,7 +1519,20 @@ function (_super) {
       width: 4,
       name: "query",
       onChange: this.onFieldValueChange
-    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), queryType === 'aggAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormLabel"], {
+      width: labelWidth
+    }, "Group Results"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
+      value: groupEnabled,
+      onChange: function onChange(event) {
+        _this.onFieldValueChange(event, 'groupEnabled');
+      }
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'true'
+    }, 'true'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'false'
+    }, 'false'))), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Collection",

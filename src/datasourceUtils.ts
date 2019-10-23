@@ -17,7 +17,16 @@
  */
 
 export class Utils {
-  static processResponse(response: any, format: any, timeField: string, anomalyThreshold: number, correlationMetric: string) {
+  static processResponse(
+    response: any,
+    format: any,
+    timeField: string,
+    anomalyThreshold: number,
+    correlationMetric: string,
+    groupMap: any,
+    grouppingEmabled: boolean,
+    topN: number
+  ) {
     const data = response.data;
     let seriesList: any;
     const series: any = {};
@@ -26,12 +35,10 @@ export class Utils {
     if (data.facets && data.facets.lineChartFacet) {
       seriesList = [];
       const jobs = data.facets.lineChartFacet.buckets;
-      const multiJobQuery = jobs.length > 1;
       jobs.forEach((job: any) => {
-        const jobId = multiJobQuery ? job.val : '';
         const partFields = job.group.buckets;
         partFields.forEach((partField: any) => {
-          let jobIdWithPartField: string = jobId;
+          let jobIdWithPartField: string = groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val];
           const partFieldJson = JSON.parse(partField.val);
           Object.keys(partFieldJson).forEach(key => {
             if (key === 'aggr_field') {
@@ -118,7 +125,7 @@ export class Utils {
         }
       });
 
-      baseline = this.getStdDev(baseline);
+      baseline = Utils.getStdDev(baseline);
 
       // Populate other metrics and find deviation from baseline
       jobs.forEach((job: any) => {
@@ -139,7 +146,7 @@ export class Utils {
               actualSeries.push([actual, ts]);
             });
 
-            compare = this.getStdDev(compare);
+            compare = Utils.getStdDev(compare);
             const dev = this.findCorrelation(baseline, compare);
 
             seriesList.push({
@@ -153,7 +160,6 @@ export class Utils {
       // Heatmap
       seriesList = [];
       const jobs = data.facets.heatMapByPartFieldsFacet.buckets;
-      const multiJobQuery = jobs.length > 1;
       jobs.forEach((job: any) => {
         const partBuckets = job.partField.buckets;
         partBuckets.forEach((partField: any) => {
@@ -169,7 +175,7 @@ export class Utils {
           });
           // Derive series name from part fields
           const partFieldJson = JSON.parse(partField.val);
-          let seriesName = multiJobQuery ? job.val : '';
+          let seriesName = groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val];
           Object.keys(partFieldJson).forEach(key => {
             if (key === 'aggr_field') {
               return;
@@ -189,7 +195,7 @@ export class Utils {
         });
       });
 
-      this.sortList(seriesList, 10);
+      seriesList = this.sortList(seriesList, topN).reverse(); // reverse because heatmap starts from bottom
     } else if (data.facets && data.facets.heatMapFacet) {
       // Heatmap
       seriesList = [];
@@ -205,13 +211,19 @@ export class Utils {
             seriesData.push([0, d.getTime()]);
           }
         });
+
         seriesList.push({
-          target: job.val,
+          jobId: job.val,
+          target: groupMap.panels[job.val],
           datapoints: seriesData,
         });
       });
 
-      this.sortList(seriesList);
+      if (grouppingEmabled) {
+        seriesList = Utils.getGrouppedResults(seriesList, groupMap);
+      }
+
+      seriesList = this.sortList(seriesList).reverse(); // reverse because heatmap starts from bottom
     } else if (format === 'rawlogs' || format === 'slowQueries') {
       // Table
       const columns: any[] = [];
@@ -291,6 +303,39 @@ export class Utils {
     };
   }
 
+  static getGrouppedResults(seriesList: [], groupMap: any) {
+    const groupSeriesList: any = {};
+    const seriesListOutput: any[] = [];
+
+    seriesList.forEach((series: any) => {
+      const jobId = series.jobId;
+      const datapoints: [] = series.datapoints;
+      const dashboardName: string = groupMap.dashboards[jobId];
+
+      if (!dashboardName) {
+        return;
+      }
+      if (!groupSeriesList[dashboardName]) {
+        groupSeriesList[dashboardName] = [];
+      }
+
+      datapoints.forEach((data, index) => {
+        if (!groupSeriesList[dashboardName][index] || groupSeriesList[dashboardName][index] < data) {
+          groupSeriesList[dashboardName][index] = data;
+        }
+      });
+    });
+
+    Object.keys(groupSeriesList).forEach((dashboard: string) => {
+      seriesListOutput.push({
+        target: dashboard,
+        datapoints: groupSeriesList[dashboard],
+      });
+    });
+
+    return seriesListOutput;
+  }
+
   static mapToTextValue(result: any) {
     if (result.data && result.data.collections) {
       return result.data.collections.map((collection: string) => {
@@ -307,10 +352,12 @@ export class Utils {
           const array = result.data.facet_counts.facet_fields[key];
           for (let i = 0; i < array.length; i += 2) {
             // take every second element
-            ar.push({
-              text: array[i],
-              expandable: false,
-            });
+            if (array[i + 1] > 0) {
+              ar.push({
+                text: array[i],
+                expandable: false,
+              });
+            }
           }
         }
       }
@@ -344,12 +391,14 @@ export class Utils {
         return 0;
       }
 
-      return totalA - totalB;
+      return totalB - totalA;
     });
 
     if (top) {
       seriesList = seriesList.slice(0, top);
     }
+
+    return seriesList;
   }
 
   static getStdDev(series: number[]) {
