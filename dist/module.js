@@ -910,7 +910,9 @@ function () {
       jobs.forEach(function (job) {
         var partFields = job.group.buckets;
         partFields.forEach(function (partField) {
-          var jobIdWithPartField = groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val];
+          var dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
+          var panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
+          var jobIdWithPartField = dashboardName + panelName;
           var partFieldJson = JSON.parse(partField.val);
           Object.keys(partFieldJson).forEach(function (key) {
             if (key === 'aggr_field') {
@@ -1044,7 +1046,9 @@ function () {
           }); // Derive series name from part fields
 
           var partFieldJson = JSON.parse(partField.val);
-          var seriesName = groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val];
+          var dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
+          var panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
+          var seriesName = dashboardName + panelName;
           Object.keys(partFieldJson).forEach(function (key) {
             if (key === 'aggr_field') {
               return;
@@ -1081,9 +1085,12 @@ function () {
             seriesData.push([0, d.getTime()]);
           }
         });
+        var dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
+        var panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
+        var targetName = dashboardName + panelName;
         seriesList.push({
           jobId: job.val,
-          target: groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val],
+          target: targetName !== '' ? targetName : job.val,
           datapoints: seriesData
         });
       });
@@ -1193,7 +1200,7 @@ function () {
       var dashboardName = groupMap.dashboards[jobId];
 
       if (!dashboardName) {
-        return;
+        dashboardName = jobId;
       }
 
       if (!groupSeriesList[dashboardName]) {

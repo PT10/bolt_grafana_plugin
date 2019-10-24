@@ -38,7 +38,9 @@ export class Utils {
       jobs.forEach((job: any) => {
         const partFields = job.group.buckets;
         partFields.forEach((partField: any) => {
-          let jobIdWithPartField: string = groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val];
+          const dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
+          const panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
+          let jobIdWithPartField: string = dashboardName + panelName;
           const partFieldJson = JSON.parse(partField.val);
           Object.keys(partFieldJson).forEach(key => {
             if (key === 'aggr_field') {
@@ -175,7 +177,9 @@ export class Utils {
           });
           // Derive series name from part fields
           const partFieldJson = JSON.parse(partField.val);
-          let seriesName = groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val];
+          const dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
+          const panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
+          let seriesName = dashboardName + panelName;
           Object.keys(partFieldJson).forEach(key => {
             if (key === 'aggr_field') {
               return;
@@ -212,9 +216,12 @@ export class Utils {
           }
         });
 
+        const dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
+        const panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
+        const targetName = dashboardName + panelName;
         seriesList.push({
           jobId: job.val,
-          target: groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val],
+          target: targetName !== '' ? targetName : job.val,
           datapoints: seriesData,
         });
       });
@@ -310,10 +317,10 @@ export class Utils {
     seriesList.forEach((series: any) => {
       const jobId = series.jobId;
       const datapoints: [] = series.datapoints;
-      const dashboardName: string = groupMap.dashboards[jobId];
+      let dashboardName: string = groupMap.dashboards[jobId];
 
       if (!dashboardName) {
-        return;
+        dashboardName = jobId;
       }
       if (!groupSeriesList[dashboardName]) {
         groupSeriesList[dashboardName] = [];
