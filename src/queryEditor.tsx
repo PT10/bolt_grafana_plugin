@@ -57,6 +57,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
       baseMetric: query.baseMetric,
       groupEnabled: query.groupEnabled || 'false',
+      aggInterval: query.aggInterval || '+1HOUR',
     };
 
     const { onChange } = this.props;
@@ -105,7 +106,21 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         value: 'correlation',
       },
     ];
-    const { query, collection, fl, queryType, numRows, start, sortField, sortOrder, rexQuery, rexOutFields, baseMetric, groupEnabled } = this.state;
+    const {
+      query,
+      collection,
+      fl,
+      queryType,
+      numRows,
+      start,
+      sortField,
+      sortOrder,
+      rexQuery,
+      rexOutFields,
+      baseMetric,
+      groupEnabled,
+      aggInterval,
+    } = this.state;
     const labelWidth = 8;
 
     return (
@@ -150,6 +165,31 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
                 <option value={'true'}>{'true'}</option>
                 <option value={'false'}>{'false'}</option>
               </select>
+            </div>
+          )}
+          {(queryType === 'aggAnomaly' || queryType === 'aggAnomalyByPartFields') && (
+            // <div className="gf-form">
+            //   <FormLabel width={14}>Aggregation Level</FormLabel>
+            //   <select
+            //     value={aggInterval}
+            //     onChange={(event: any) => {
+            //       this.onFieldValueChange(event, 'aggInterval');
+            //     }}
+            //   >
+            //     <option value={'+1HOUR'}>{'Hour'}</option>
+            //     <option value={'+1MINUTE'}>{'Minute'}</option>
+            //   </select>
+            // </div>
+            <div className="gf-form">
+              <FormField
+                label="Aggregation Interval"
+                type="text"
+                value={aggInterval}
+                labelWidth={12}
+                width={4}
+                name="aggInterval"
+                onChange={this.onFieldValueChange}
+              ></FormField>
             </div>
           )}
           {/* Show collection name textbox */}

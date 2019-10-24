@@ -378,8 +378,8 @@ function (_super) {
     _this.rawCollectionWindow = 1;
     _this.totalCount = undefined;
     _this.facets = {
-      aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query",' + '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
-      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":1000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' + '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' + '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
+      aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":-1,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' + '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
+      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":-1,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' + '"field":"partition_fields","limit":-1,"facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' + '"gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]",' + '"facet":{"score":"max(score_value)"}}}}}}}}}',
       indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
       correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
@@ -580,8 +580,9 @@ function (_super) {
         solrQuery['facet.field'] = 'id';
         solrQuery['facet.limit'] = 2;
       } else if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
+        var aggInterval = _this.templateSrv.replace(query.aggInterval, options.scopedVars) || '+1HOUR';
         solrQuery['facet'] = true;
-        solrQuery['json.facet'] = _this.facets[query.queryType].replace('__START_TIME__', startTime).replace('__END_TIME__', endTime).replace('__SCORE_THRESHOLD__', _this.anomalyThreshold);
+        solrQuery['json.facet'] = _this.facets[query.queryType].replace('__AGG_INTERVAL__', aggInterval).replace('__START_TIME__', startTime).replace('__END_TIME__', endTime).replace('__SCORE_THRESHOLD__', _this.anomalyThreshold);
       } else {
         delete solrQuery['facet'];
         delete solrQuery['json.facet'];
@@ -1082,7 +1083,7 @@ function () {
         });
         seriesList.push({
           jobId: job.val,
-          target: groupMap.panels[job.val],
+          target: groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val],
           datapoints: seriesData
         });
       });
@@ -1200,7 +1201,7 @@ function () {
       }
 
       datapoints.forEach(function (data, index) {
-        if (!groupSeriesList[dashboardName][index] || groupSeriesList[dashboardName][index] < data) {
+        if (!groupSeriesList[dashboardName][index] || groupSeriesList[dashboardName][index][0] < data[0]) {
           groupSeriesList[dashboardName][index] = data;
         }
       });
@@ -1444,7 +1445,8 @@ function (_super) {
       rexQuery: query.rexQuery || '\\s*.*\\s*\\[c\\:(.*)\\ss\\:(.*)\\sr\\:(.*)\\sx\\:(.*)\\]\\s*o.a.s.c.S.SlowRequest.*path=(.*)\\s*' + 'params=\\{(.*)\\}\\s*.*hits=(.*)\\s*status.*QTime=(.*)',
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
       baseMetric: query.baseMetric,
-      groupEnabled: query.groupEnabled || 'false'
+      groupEnabled: query.groupEnabled || 'false',
+      aggInterval: query.aggInterval || '+1HOUR'
     });
     var onChange = _this.props.onChange;
     onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, _this.state));
@@ -1491,7 +1493,8 @@ function (_super) {
         rexQuery = _a.rexQuery,
         rexOutFields = _a.rexOutFields,
         baseMetric = _a.baseMetric,
-        groupEnabled = _a.groupEnabled;
+        groupEnabled = _a.groupEnabled,
+        aggInterval = _a.aggInterval;
     var labelWidth = 8;
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
@@ -1532,7 +1535,29 @@ function (_super) {
       value: 'true'
     }, 'true'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
       value: 'false'
-    }, 'false'))), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }, 'false'))), (queryType === 'aggAnomaly' || queryType === 'aggAnomalyByPartFields') && // <div className="gf-form">
+    //   <FormLabel width={14}>Aggregation Level</FormLabel>
+    //   <select
+    //     value={aggInterval}
+    //     onChange={(event: any) => {
+    //       this.onFieldValueChange(event, 'aggInterval');
+    //     }}
+    //   >
+    //     <option value={'+1HOUR'}>{'Hour'}</option>
+    //     <option value={'+1MINUTE'}>{'Minute'}</option>
+    //   </select>
+    // </div>
+    react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+      label: "Aggregation Interval",
+      type: "text",
+      value: aggInterval,
+      labelWidth: 12,
+      width: 4,
+      name: "aggInterval",
+      onChange: this.onFieldValueChange
+    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
       label: "Collection",

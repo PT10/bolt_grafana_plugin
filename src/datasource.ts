@@ -46,13 +46,14 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
   facets: any = {
     aggAnomaly:
-      '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":10000,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' +
-      '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR","facet":{"score":{"type":"query",' +
+      '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":-1,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' +
+      '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' +
       '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
     aggAnomalyByPartFields:
-      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":1000,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' +
-      '"field":"partition_fields","facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"+1HOUR",' +
-      '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
+      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":-1,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' +
+      '"field":"partition_fields","limit":-1,"facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' +
+      '"gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]",' +
+      '"facet":{"score":"max(score_value)"}}}}}}}}}',
     indvAnomaly:
       '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
       '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
@@ -267,8 +268,10 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           solrQuery['facet.field'] = 'id';
           solrQuery['facet.limit'] = 2;
         } else if (_.keys(this.facets).includes(query.queryType)) {
+          const aggInterval = this.templateSrv.replace(query.aggInterval, options.scopedVars) || '+1HOUR';
           solrQuery['facet'] = true;
           solrQuery['json.facet'] = this.facets[query.queryType]
+            .replace('__AGG_INTERVAL__', aggInterval)
             .replace('__START_TIME__', startTime)
             .replace('__END_TIME__', endTime)
             .replace('__SCORE_THRESHOLD__', this.anomalyThreshold);

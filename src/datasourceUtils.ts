@@ -214,7 +214,7 @@ export class Utils {
 
         seriesList.push({
           jobId: job.val,
-          target: groupMap.panels[job.val],
+          target: groupMap.dashboards[job.val] + '_' + groupMap.panels[job.val],
           datapoints: seriesData,
         });
       });
@@ -320,7 +320,7 @@ export class Utils {
       }
 
       datapoints.forEach((data, index) => {
-        if (!groupSeriesList[dashboardName][index] || groupSeriesList[dashboardName][index] < data) {
+        if (!groupSeriesList[dashboardName][index] || groupSeriesList[dashboardName][index][0] < data[0]) {
           groupSeriesList[dashboardName][index] = data;
         }
       });
