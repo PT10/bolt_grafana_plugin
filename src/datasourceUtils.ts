@@ -165,6 +165,7 @@ export class Utils {
       jobs.forEach((job: any) => {
         const partBuckets = job.partField.buckets;
         partBuckets.forEach((partField: any) => {
+          const score: number = partField.s;
           const dayBuckets = partField.Day0.buckets;
           const seriesData: any[] = [];
           dayBuckets.forEach((bucket: any) => {
@@ -195,6 +196,7 @@ export class Utils {
           seriesList.push({
             target: seriesName,
             datapoints: seriesData,
+            score: score,
           });
         });
       });
@@ -399,6 +401,7 @@ export class Utils {
       }
 
       return totalB - totalA;
+      // return b.score - a.score;
     });
 
     if (top) {

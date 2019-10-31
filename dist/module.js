@@ -379,9 +379,14 @@ function (_super) {
     _this.totalCount = undefined;
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":-1,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' + '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
-      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":-1,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' + '"field":"partition_fields","limit":-1,"facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' + '"gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]",' + '"facet":{"score":"max(score_value)"}}}}}}}}}',
-      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
-      correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
+      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit": __TOPN__,"type":"terms","field":"jobId",' + '"facet":{"partField":{"type":"terms","field":"partition_fields","limit": __TOPN__,"sort":"s desc",' + '"facet":{"s":"max(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' + '"gap":"__AGG_INTERVAL__","sc2": "sum(sc)",' + '"facet":{"sc": "max(score_value)","score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]",' + '"facet":{"score":"max(score_value)"}}}}}}}}}',
+
+      /*'{"heatMapByPartFieldsFacet":{"type":"terms","field":"partition_fields","limit":__TOPN__,"offest":0,"sort":"s desc",' +
+        '"facet":{"s":"sum(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' +
+        '"gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]",' +
+        '"facet":{"score":"max(score_value)"}}}}}}}',*/
+      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
+      correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
     _this.jobIdMappings = {
       dashboards: {},
@@ -582,7 +587,11 @@ function (_super) {
       } else if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
         var aggInterval = _this.templateSrv.replace(query.aggInterval, options.scopedVars) || '+1HOUR';
         solrQuery['facet'] = true;
-        solrQuery['json.facet'] = _this.facets[query.queryType].replace('__AGG_INTERVAL__', aggInterval).replace('__START_TIME__', startTime).replace('__END_TIME__', endTime).replace('__SCORE_THRESHOLD__', _this.anomalyThreshold);
+        solrQuery['json.facet'] = _this.facets[query.queryType].replace('__AGG_INTERVAL__', aggInterval).replace('__START_TIME__', startTime).replace('__END_TIME__', endTime).replace(/__TOPN__/g, _this.topN).replace('__SCORE_THRESHOLD__', _this.anomalyThreshold);
+
+        if (query.queryType === 'aggAnomalyByPartFields') {
+          solrQuery['facet.pivot'] = 'jobId,partition_fields';
+        }
       } else {
         delete solrQuery['facet'];
         delete solrQuery['json.facet'];
@@ -1033,6 +1042,7 @@ function () {
       jobs.forEach(function (job) {
         var partBuckets = job.partField.buckets;
         partBuckets.forEach(function (partField) {
+          var score = partField.s;
           var dayBuckets = partField.Day0.buckets;
           var seriesData = [];
           dayBuckets.forEach(function (bucket) {
@@ -1064,10 +1074,58 @@ function () {
 
           seriesList.push({
             target: seriesName,
-            datapoints: seriesData
+            datapoints: seriesData,
+            score: score
           });
         });
       });
+      /*const partFieldJobIdMap: any = {};
+             const buckets = data.facet_counts.facet_pivot['jobId,partition_fields'];
+             buckets.forEach((job: any) => {
+        const jobId = job.value;
+        job.pivot.forEach((partField: any) => {
+          const partFieldObj = JSON.parse(partField.value);
+          partFieldJobIdMap[partFieldObj.aggr_field] = jobId;
+        });
+      });
+             seriesList = [];
+      const partFields = data.facets.heatMapByPartFieldsFacet.buckets;
+      partFields.forEach((partField: any) => {
+        const score: number = partField.s;
+        const dayBuckets = partField.Day0.buckets;
+        const seriesData: any[] = [];
+        dayBuckets.forEach((bucket: any) => {
+          const d: Date = new Date(bucket.val);
+          if (bucket.score != null && bucket.score.score != null) {
+            seriesData.push([bucket.score.score, d.getTime()]);
+          } else {
+            seriesData.push([0, d.getTime()]);
+          }
+        });
+               // Derive series name from part fields
+        const partFieldJson = JSON.parse(partField.val);
+        const jobId = partFieldJobIdMap[partFieldJson.aggr_field];
+        const dashboardName = groupMap.dashboards[jobId] ? groupMap.dashboards[jobId] + '_' : '';
+        const panelName = groupMap.panels[jobId] ? groupMap.panels[jobId] : '';
+        let seriesName = dashboardName + panelName;
+        Object.keys(partFieldJson).forEach(key => {
+          if (key === 'aggr_field') {
+            return;
+          }
+          seriesName += '_' + key + '_' + partFieldJson[key];
+        });
+        seriesName += '_' + partFieldJson.aggr_field;
+               if (seriesName.startsWith('_')) {
+          seriesName = seriesName.slice(1);
+        }
+               seriesList.push({
+          target: seriesName,
+          datapoints: seriesData,
+          score: score,
+        });
+      });
+      */
+
       seriesList = this.sortList(seriesList, topN).reverse(); // reverse because heatmap starts from bottom
     } else if (data.facets && data.facets.heatMapFacet) {
       // Heatmap
@@ -1280,7 +1338,7 @@ function () {
         return 0;
       }
 
-      return totalB - totalA;
+      return totalB - totalA; // return b.score - a.score;
     });
 
     if (top) {

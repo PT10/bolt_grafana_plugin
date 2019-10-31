@@ -50,19 +50,21 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' +
       '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
     aggAnomalyByPartFields:
-      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":-1,"type":"terms","field":"jobId","facet":{"partField":{"type":"terms",' +
-      '"field":"partition_fields","limit":-1,"facet":{"Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' +
-      '"gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]",' +
+      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit": __TOPN__,"type":"terms","field":"jobId",' +
+      '"facet":{"partField":{"type":"terms","field":"partition_fields","limit": __TOPN__,"sort":"s desc",' +
+      '"facet":{"s":"sum(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' +
+      '"gap":"__AGG_INTERVAL__","sc2": "sum(sc)",' +
+      '"facet":{"sc": "max(score_value)","score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]",' +
       '"facet":{"score":"max(score_value)"}}}}}}}}}',
     indvAnomaly:
-      '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
-      '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
+      '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
+      '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
       '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' +
       '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' +
       '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
     correlation:
-      '{"correlation":{"numBuckets":true,"offset":0,"limit":10,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
-      '"offset":0,"limit":10,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
+      '{"correlation":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
+      '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
       '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}',
   };
 
@@ -274,6 +276,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
             .replace('__AGG_INTERVAL__', aggInterval)
             .replace('__START_TIME__', startTime)
             .replace('__END_TIME__', endTime)
+            .replace(/__TOPN__/g, this.topN)
             .replace('__SCORE_THRESHOLD__', this.anomalyThreshold);
         } else {
           delete solrQuery['facet'];
