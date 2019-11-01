@@ -58,8 +58,8 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
     indvAnomaly:
       '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
-      '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
-      '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' +
+      '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",' +
+      '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","facet":{"actual":{"type":"terms","field":"actual_value"}, ' +
       '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' +
       '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
     correlation:
@@ -77,7 +77,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
     this.baseUrl = instanceSettings.url;
     if (this.baseUrl.endsWith('/')) {
-      this.baseUrl += 'solr'; //this.baseUrl.substr(0, this.baseUrl.length - 1);
+      this.baseUrl += 'solr';
     } else {
       this.baseUrl += '/solr';
     }
@@ -149,80 +149,8 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         if (!query.query) {
           return Promise.resolve([]);
         }
-        let q: string;
-        const queryStr = this.templateSrv.replace(query.query, options.scopedVars);
-        const matches = queryStr.match(/__dashboard__:\s*(.*)/);
-        let matches2 = queryStr.match(/__panel__:\s*(.*) AND .*/);
-        if (!matches2) {
-          matches2 = queryStr.match(/__panel__:\s*(.*)/);
-        }
-        if (matches && matches.length === 2) {
-          const dahsboardName: string = matches[1];
-          if (dahsboardName.startsWith('{')) {
-            // All option
-            const jobIdList: any[] = [];
-            const dashboards = dahsboardName
-              .replace('{', '')
-              .replace('}', '')
-              .split(',');
 
-            dashboards.forEach(dashboard => {
-              const jobId: string[] = Object.keys(this.jobIdMappings.dashboards).filter(jobId => {
-                return this.jobIdMappings.dashboards[jobId] === dashboard;
-              });
-
-              if (jobId) {
-                jobId.forEach(job => jobIdList.push(job));
-              }
-            });
-
-            const jobIdStr = '(' + jobIdList.join(' OR ') + ')';
-            q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
-          } else {
-            // particular option
-            const jobIdList: string[] = Object.keys(this.jobIdMappings.dashboards).filter((jobId: string) => {
-              return this.jobIdMappings.dashboards[jobId] === dahsboardName;
-            });
-
-            const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
-            q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
-          }
-          q = Utils.queryBuilder(q);
-        } else if (matches2 && matches2.length === 2) {
-          const panelName: string = matches2[1];
-          if (panelName.startsWith('{')) {
-            // All option
-            const jobIdList: any[] = [];
-            const panels = panelName
-              .replace('{', '')
-              .replace('}', '')
-              .split(',');
-
-            panels.forEach(panel => {
-              const jobId = Object.keys(this.jobIdMappings.panels).filter(jobId => {
-                return this.jobIdMappings.panels[jobId] === panel;
-              });
-
-              if (jobId) {
-                jobIdList.push(jobId);
-              }
-            });
-
-            const jobIdStr = '(' + jobIdList.join(' OR ') + ')';
-            q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
-          } else {
-            // particular option
-            const jobIdList: string[] = Object.keys(this.jobIdMappings.panels).filter((jobId: string) => {
-              return this.jobIdMappings.panels[jobId] === panelName;
-            });
-
-            const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
-            q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
-          }
-          q = Utils.queryBuilder(q);
-        } else {
-          q = Utils.queryBuilder(queryStr);
-        }
+        let q = this.getQueryString(query, options);
 
         // Provision for empty series filter
         if (q.match(/AND\s*$/)) {
@@ -231,22 +159,23 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
         let start = this.templateSrv.replace(query.start, options.scopedVars);
         let numRows = this.templateSrv.replace(query.numRows.toString(), options.scopedVars) || 100;
-
         if (query.queryType === 'chart') {
           numRows = 1000; // Cursor page size
         } else {
           numRows = ['count', 'facet'].includes(query.queryType) ? 0 : numRows;
         }
+        numRows = Number(numRows);
+        start = numRows * Number(start);
 
         const startTime = options.range.from.toISOString();
         const endTime = options.range.to.toISOString();
 
-        numRows = Number(numRows);
-        start = numRows * Number(start);
+        const solrQueryBody: any = {};
+        solrQueryBody.query = q;
+
         // Add basic query fields
-        const solrQuery: any = {
+        const solrQueryParams: any = {
           fq: this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
-          q: q,
           fl: this.timestampField + (query.fl ? ',' + query.fl : ''),
           rows: numRows,
           start: start,
@@ -254,54 +183,56 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
         // Add fields specific to raw logs and single stat on raw logs
         if (query.queryType === 'rawlogs' || query.queryType === 'count' || query.queryType === 'slowQueries') {
-          solrQuery['collectionWindow'] = this.rawCollectionWindow;
-          solrQuery['startTime'] = startTime;
-          solrQuery['endTime'] = endTime;
-          solrQuery['getRawMessages'] = true;
+          solrQueryParams['collectionWindow'] = this.rawCollectionWindow;
+          solrQueryParams['startTime'] = startTime;
+          solrQueryParams['endTime'] = endTime;
+          solrQueryParams['getRawMessages'] = true;
         }
 
         if (query.queryType === 'slowQueries') {
-          solrQuery['rex.message.q'] = query.rexQuery;
-          solrQuery['rex.message.outputfields'] = query.rexOutFields;
+          solrQueryParams['rex.message.q'] = query.rexQuery;
+          solrQueryParams['rex.message.outputfields'] = query.rexOutFields;
         }
 
         // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)
         // TODO: Find out why numFound is returned only after specifying the facet
         if (query.queryType === 'count' && this.rawCollectionType === 'multi') {
-          solrQuery['facet'] = true;
-          solrQuery['facet.field'] = 'id';
-          solrQuery['facet.limit'] = 2;
+          solrQueryParams['facet'] = true;
+          solrQueryParams['facet.field'] = 'id';
+          solrQueryParams['facet.limit'] = 2;
         } else if (_.keys(this.facets).includes(query.queryType)) {
           const aggInterval = this.templateSrv.replace(query.aggInterval, options.scopedVars) || '+1HOUR';
-          solrQuery['facet'] = true;
-          solrQuery['json.facet'] = this.facets[query.queryType]
+          solrQueryParams['facet'] = true;
+          solrQueryParams['json.facet'] = this.facets[query.queryType]
             .replace('__AGG_INTERVAL__', aggInterval)
             .replace('__START_TIME__', startTime)
             .replace('__END_TIME__', endTime)
             .replace(/__TOPN__/g, this.topN)
             .replace('__SCORE_THRESHOLD__', this.anomalyThreshold);
         } else {
-          delete solrQuery['facet'];
-          delete solrQuery['json.facet'];
+          delete solrQueryParams['facet'];
+          delete solrQueryParams['json.facet'];
         }
 
         // for cursor to work. Will sort by ts later
         if (query.queryType === 'chart') {
-          solrQuery['sort'] = 'id asc';
+          solrQueryParams['sort'] = 'id asc';
         } else if (query.sortField) {
-          solrQuery['sort'] =
+          solrQueryParams['sort'] =
             this.templateSrv.replace(query.sortField, options.scopedVars) + ' ' + this.templateSrv.replace(query.sortOrder, options.scopedVars);
         }
 
-        const params = {
+        const httpOpts = {
           url: this.baseUrl + '/' + collection + '/select?wt=json',
-          method: 'GET',
-          params: solrQuery,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json;charset=utf-8' },
+          params: solrQueryParams,
+          data: solrQueryBody, // There can be a big query due to long jobIds and hence it is sent in post request body
         };
 
         const cursor = query.queryType === 'chart' ? '*' : null;
 
-        return this.sendQueryRequest([], params, query, cursor); // cursor mark or charts
+        return this.sendQueryRequest([], httpOpts, query, cursor); // cursor mark or charts
       })
       .values();
 
@@ -320,14 +251,6 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           });
         });
       });
-      /*
-      const result = {
-        data: responses.map(response => {
-          return response
-        }),
-      };
-
-      result.data = _.flatten(result.data);*/
 
       _.keys(series).forEach(key => {
         resultSeries.push({
@@ -377,12 +300,15 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       });
   }
 
-  sendQueryRequest(respArr: any[], params: any, query: BoltQuery, cursor?: any) {
+  sendQueryRequest(respArr: any[], options: any, query: BoltQuery, cursor?: any) {
+    /*params.method = 'POST';
+    params.headers = { 'Content-Type': 'application/json' };*/
+
     if (cursor) {
-      params.params['cursorMark'] = cursor;
+      options.params['cursorMark'] = cursor;
     }
     return this.backendSrv
-      .datasourceRequest(params)
+      .datasourceRequest(options)
       .then((response: any) => {
         if (response.status === 200) {
           const groupMap = this.jobIdMappings;
@@ -401,7 +327,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           respArr.push(processedData);
 
           if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
-            return this.sendQueryRequest(respArr, params, query, response.data.nextCursorMark);
+            return this.sendQueryRequest(respArr, options, query, response.data.nextCursorMark);
           } else {
             return respArr;
           }
@@ -442,35 +368,31 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       }
 
       if (dashboards[0] === '$__all') {
-        const allPanles = variable.options
-          .slice(1)
-          .map((opt: any) => {
-            return '"' + opt.text + '"';
-          })
-          .join(' OR ');
-        filterFieldVal = '(' + allPanles + ')';
+        if (!variable || !variable.options || variable.options.length < 2) {
+          filterFieldVal = '';
+        } else {
+          const allPanles = variable.options
+            .slice(1)
+            .map((opt: any) => {
+              return '"' + opt.text + '"';
+            })
+            .join(' OR ');
+          filterFieldVal = '(' + allPanles + ')';
+        }
       } else {
         dashboards = dashboards.map(dashboard => {
-          return encodeURI('"' + dashboard + '"');
+          return '"' + dashboard + '"';
         });
         filterFieldVal = '(' + dashboards.join(' OR ') + ')';
       }
     }
 
-    const url =
-      this.baseUrl +
-      '/' +
-      collection +
-      '/select?q=' +
-      filterField +
-      ': ' +
-      filterFieldVal +
-      '&facet=true&facet.field=' +
-      field +
-      '&wt=json&rows=0&facet.limit=-1';
+    const url = this.baseUrl + '/' + collection + '/select?facet=true&facet.field=' + field + '&wt=json&rows=0&facet.limit=-1';
     const params = {
       url: url,
-      method: 'GET',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      data: { query: filterField + ': ' + filterFieldVal },
     };
     return this.backendSrv.datasourceRequest(params).then((response: any) => {
       if (response.status === 200) {
@@ -495,16 +417,12 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     };
     return this.backendSrv.datasourceRequest(params).then((response: any) => {
       if (response.status === 200) {
-        this.buildJobIdMap(response.data.response.docs);
+        this.jobIdMappings = { dashboards: {}, panels: {} };
+        response.data.response.docs.forEach((doc: any) => {
+          this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
+          this.jobIdMappings.panels[doc.jobId] = doc.name;
+        });
       }
-    });
-  }
-
-  buildJobIdMap(docs: any[]) {
-    this.jobIdMappings = { dashboards: {}, panels: {} };
-    docs.forEach(doc => {
-      this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
-      this.jobIdMappings.panels[doc.jobId] = doc.name;
     });
   }
 
@@ -551,34 +469,96 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     };
 
     return this.backendSrv.datasourceRequest(options).then((data: any) => {
-      let arr: any[] = [];
-
       this.totalCount = data.data.response.numFound;
-      if (data && data.data && data.data.response) {
-        for (let i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
-          arr.push(i);
-        }
-      }
-      arr = arr.map(ele => {
-        return {
-          text: ele + 1,
-          value: ele,
-        };
-      });
-      const firstNResults = arr.slice(0, 10);
-      const lastNResults = arr.splice(arr.length - 11, arr.length - 1);
-
-      if (firstNResults.length === 0 && lastNResults.length === 0) {
-        return [
-          {
-            text: 0,
-            value: 0,
-          },
-        ];
-      }
-
-      return firstNResults.concat(lastNResults);
+      return Utils.getFirstAndLastNResults(data, pageSize);
     });
+  }
+
+  getQueryString(query: BoltQuery, options: DataQueryRequest<BoltQuery>) {
+    let q: string;
+    const queryStr = this.templateSrv.replace(query.query, options.scopedVars);
+    const matches = queryStr.match(/__dashboard__:\s*(.*)/);
+    let matches2 = queryStr.match(/__panel__:\s*(.*) AND .*/);
+    if (!matches2) {
+      matches2 = queryStr.match(/__panel__:\s*(.*)/);
+    }
+
+    if (matches && matches.length === 2) {
+      // Dashboard case
+      const dahsboardName: string = matches[1];
+      if (dahsboardName === '*') {
+        q = queryStr.replace('__dashboard__', 'jobId');
+      } else if (dahsboardName.startsWith('{')) {
+        // All option
+        const jobIdList: any[] = [];
+        const dashboards = dahsboardName
+          .replace('{', '')
+          .replace('}', '')
+          .split(',');
+
+        dashboards.forEach(dashboard => {
+          const jobId: string[] = Object.keys(this.jobIdMappings.dashboards).filter(jobId => {
+            return this.jobIdMappings.dashboards[jobId] === dashboard;
+          });
+
+          if (jobId) {
+            jobId.forEach(job => jobIdList.push(job));
+          }
+        });
+
+        const jobIdStr = '(' + jobIdList.join(' OR ') + ')';
+        q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
+      } else {
+        // particular option
+        const jobIdList: string[] = Object.keys(this.jobIdMappings.dashboards).filter((jobId: string) => {
+          return this.jobIdMappings.dashboards[jobId] === dahsboardName;
+        });
+
+        const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
+        q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
+      }
+      q = Utils.queryBuilder(q);
+    } else if (matches2 && matches2.length === 2) {
+      // Panel case
+      const panelName: string = matches2[1];
+
+      if (panelName === '*') {
+        q = queryStr.replace('__panel__', 'jobId');
+      } else if (panelName.startsWith('{')) {
+        // All option
+        const jobIdList: any[] = [];
+        const panels = panelName
+          .replace('{', '')
+          .replace('}', '')
+          .split(',');
+
+        panels.forEach(panel => {
+          const jobId = Object.keys(this.jobIdMappings.panels).filter(jobId => {
+            return this.jobIdMappings.panels[jobId] === panel;
+          });
+
+          if (jobId) {
+            jobIdList.push(jobId);
+          }
+        });
+
+        const jobIdStr = '(' + jobIdList.join(' OR ') + ')';
+        q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
+      } else {
+        // particular option
+        const jobIdList: string[] = Object.keys(this.jobIdMappings.panels).filter((jobId: string) => {
+          return this.jobIdMappings.panels[jobId] === panelName;
+        });
+
+        const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
+        q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
+      }
+      q = Utils.queryBuilder(q);
+    } else {
+      q = Utils.queryBuilder(queryStr);
+    }
+
+    return q;
   }
 }
 
