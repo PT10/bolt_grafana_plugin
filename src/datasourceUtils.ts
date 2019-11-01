@@ -355,15 +355,25 @@ export class Utils {
       });
     }
     if (result.data && result.data.facet_counts) {
-      const ar = [];
+      const ar: any[] = [];
       for (const key in result.data.facet_counts.facet_fields) {
         if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
           const array = result.data.facet_counts.facet_fields[key];
           for (let i = 0; i < array.length; i += 2) {
             // take every second element
-            if (array[i + 1] > 0) {
+            if (
+              array[i + 1] > 0 &&
+              !ar.find(ele => {
+                return ele.text === array[i];
+              })
+            ) {
+              let text = array[i];
+              const detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
+              if (detectorPatternMatches) {
+                text = '"' + detectorPatternMatches[1] + '"';
+              }
               ar.push({
-                text: array[i],
+                text: text,
                 expandable: false,
               });
             }

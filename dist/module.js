@@ -503,6 +503,8 @@ function (_super) {
           var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
           q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
         }
+
+        q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(q);
       } else if (matches2 && matches2.length === 2) {
         var panelName_1 = matches2[1];
 
@@ -529,6 +531,8 @@ function (_super) {
           var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
           q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
         }
+
+        q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(q);
       } else {
         q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(queryStr);
       } // Provision for empty series filter
@@ -722,7 +726,10 @@ function (_super) {
       }
 
       if (dashboards[0] === '$__all') {
-        filterFieldVal = '*';
+        var allPanles = variable.options.slice(1).map(function (opt) {
+          return '"' + opt.text + '"';
+        }).join(' OR ');
+        filterFieldVal = '(' + allPanles + ')';
       } else {
         dashboards = dashboards.map(function (dashboard) {
           return encodeURI('"' + dashboard + '"');
@@ -731,7 +738,7 @@ function (_super) {
       }
     }
 
-    var url = this.baseUrl + '/' + collection + '/select?q=' + filterField + ': ' + filterFieldVal + '&facet=true&facet.field=' + field + '&wt=json&rows=0';
+    var url = this.baseUrl + '/' + collection + '/select?q=' + filterField + ': ' + filterFieldVal + '&facet=true&facet.field=' + field + '&wt=json&rows=0&facet.limit=-1';
     var params = {
       url: url,
       method: 'GET'
@@ -1237,20 +1244,37 @@ function () {
     if (result.data && result.data.facet_counts) {
       var ar = [];
 
-      for (var key in result.data.facet_counts.facet_fields) {
+      var _loop_1 = function _loop_1(key) {
         if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
-          var array = result.data.facet_counts.facet_fields[key];
+          var array_1 = result.data.facet_counts.facet_fields[key];
 
-          for (var i = 0; i < array.length; i += 2) {
+          var _loop_2 = function _loop_2(i) {
             // take every second element
-            if (array[i + 1] > 0) {
+            if (array_1[i + 1] > 0 && !ar.find(function (ele) {
+              return ele.text === array_1[i];
+            })) {
+              var text = array_1[i];
+              var detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
+
+              if (detectorPatternMatches) {
+                text = '"' + detectorPatternMatches[1] + '"';
+              }
+
               ar.push({
-                text: array[i],
+                text: text,
                 expandable: false
               });
             }
+          };
+
+          for (var i = 0; i < array_1.length; i += 2) {
+            _loop_2(i);
           }
         }
+      };
+
+      for (var key in result.data.facet_counts.facet_fields) {
+        _loop_1(key);
       }
 
       return ar;

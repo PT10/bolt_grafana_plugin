@@ -187,6 +187,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
             const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
             q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
           }
+          q = Utils.queryBuilder(q);
         } else if (matches2 && matches2.length === 2) {
           const panelName: string = matches2[1];
           if (panelName.startsWith('{')) {
@@ -218,6 +219,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
             const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
             q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
           }
+          q = Utils.queryBuilder(q);
         } else {
           q = Utils.queryBuilder(queryStr);
         }
@@ -440,7 +442,13 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       }
 
       if (dashboards[0] === '$__all') {
-        filterFieldVal = '*';
+        const allPanles = variable.options
+          .slice(1)
+          .map((opt: any) => {
+            return '"' + opt.text + '"';
+          })
+          .join(' OR ');
+        filterFieldVal = '(' + allPanles + ')';
       } else {
         dashboards = dashboards.map(dashboard => {
           return encodeURI('"' + dashboard + '"');
@@ -450,7 +458,16 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     }
 
     const url =
-      this.baseUrl + '/' + collection + '/select?q=' + filterField + ': ' + filterFieldVal + '&facet=true&facet.field=' + field + '&wt=json&rows=0';
+      this.baseUrl +
+      '/' +
+      collection +
+      '/select?q=' +
+      filterField +
+      ': ' +
+      filterFieldVal +
+      '&facet=true&facet.field=' +
+      field +
+      '&wt=json&rows=0&facet.limit=-1';
     const params = {
       url: url,
       method: 'GET',
