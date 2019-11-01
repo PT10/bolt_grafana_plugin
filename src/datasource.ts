@@ -46,16 +46,16 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
   facets: any = {
     aggAnomaly:
-      '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":-1,"type":"terms","field":"jobId","facet":{"Day0":{"type":"range",' +
+      '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"sort":"s desc","type":"terms","field":"jobId",' +
+      '"facet":{"s": "max(score_value)", "Day0":{"type":"range",' +
       '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' +
       '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
     aggAnomalyByPartFields:
       '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit": __TOPN__,"type":"terms","field":"jobId",' +
       '"facet":{"partField":{"type":"terms","field":"partition_fields","limit": __TOPN__,"sort":"s desc",' +
-      '"facet":{"s":"sum(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' +
-      '"gap":"__AGG_INTERVAL__","sc2": "sum(sc)",' +
-      '"facet":{"sc": "max(score_value)","score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]",' +
-      '"facet":{"score":"max(score_value)"}}}}}}}}}',
+      '"facet":{"s":"max(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' +
+      '"gap":"__AGG_INTERVAL__",' +
+      '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
     indvAnomaly:
       '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
       '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
