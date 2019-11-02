@@ -380,7 +380,7 @@ function (_super) {
     _this.facets = {
       aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"sort":"s desc","type":"terms","field":"jobId",' + '"facet":{"s": "max(score_value)", "Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' + '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
       aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit": __TOPN__,"type":"terms","field":"jobId",' + '"facet":{"partField":{"type":"terms","field":"partition_fields","limit": __TOPN__,"sort":"s desc",' + '"facet":{"s":"max(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' + '"gap":"__AGG_INTERVAL__",' + '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
-      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
+      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
       correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
     _this.jobIdMappings = {
@@ -392,7 +392,7 @@ function (_super) {
     _this.baseUrl = instanceSettings.url;
 
     if (_this.baseUrl.endsWith('/')) {
-      _this.baseUrl += 'solr'; //this.baseUrl.substr(0, this.baseUrl.length - 1);
+      _this.baseUrl += 'solr';
     } else {
       _this.baseUrl += '/solr';
     }
@@ -464,74 +464,7 @@ function (_super) {
         return Promise.resolve([]);
       }
 
-      var q;
-
-      var queryStr = _this.templateSrv.replace(query.query, options.scopedVars);
-
-      var matches = queryStr.match(/__dashboard__:\s*(.*)/);
-      var matches2 = queryStr.match(/__panel__:\s*(.*) AND .*/);
-
-      if (!matches2) {
-        matches2 = queryStr.match(/__panel__:\s*(.*)/);
-      }
-
-      if (matches && matches.length === 2) {
-        var dahsboardName_1 = matches[1];
-
-        if (dahsboardName_1.startsWith('{')) {
-          // All option
-          var jobIdList_1 = [];
-          var dashboards = dahsboardName_1.replace('{', '').replace('}', '').split(',');
-          dashboards.forEach(function (dashboard) {
-            var jobId = Object.keys(_this.jobIdMappings.dashboards).filter(function (jobId) {
-              return _this.jobIdMappings.dashboards[jobId] === dashboard;
-            });
-
-            if (jobId) {
-              jobId.forEach(function (job) {
-                return jobIdList_1.push(job);
-              });
-            }
-          });
-          var jobIdStr = '(' + jobIdList_1.join(' OR ') + ')';
-          q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
-        } else {
-          // particular option
-          var jobIdList = Object.keys(_this.jobIdMappings.dashboards).filter(function (jobId) {
-            return _this.jobIdMappings.dashboards[jobId] === dahsboardName_1;
-          });
-          var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
-          q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
-        }
-      } else if (matches2 && matches2.length === 2) {
-        var panelName_1 = matches2[1];
-
-        if (panelName_1.startsWith('{')) {
-          // All option
-          var jobIdList_2 = [];
-          var panels = panelName_1.replace('{', '').replace('}', '').split(',');
-          panels.forEach(function (panel) {
-            var jobId = Object.keys(_this.jobIdMappings.panels).filter(function (jobId) {
-              return _this.jobIdMappings.panels[jobId] === panel;
-            });
-
-            if (jobId) {
-              jobIdList_2.push(jobId);
-            }
-          });
-          var jobIdStr = '(' + jobIdList_2.join(' OR ') + ')';
-          q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
-        } else {
-          // particular option
-          var jobIdList = Object.keys(_this.jobIdMappings.panels).filter(function (jobId) {
-            return _this.jobIdMappings.panels[jobId] === panelName_1;
-          });
-          var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
-          q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
-        }
-      } else {
-        q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(queryStr);
-      } // Provision for empty series filter
+      var q = _this.getQueryString(query, options); // Provision for empty series filter
 
 
       if (q.match(/AND\s*$/)) {
@@ -548,60 +481,65 @@ function (_super) {
         numRows = ['count', 'facet'].includes(query.queryType) ? 0 : numRows;
       }
 
+      numRows = Number(numRows);
+      start = numRows * Number(start);
       var startTime = options.range.from.toISOString();
       var endTime = options.range.to.toISOString();
-      numRows = Number(numRows);
-      start = numRows * Number(start); // Add basic query fields
+      var solrQueryBody = {};
+      solrQueryBody.query = q; // Add basic query fields
 
-      var solrQuery = {
+      var solrQueryParams = {
         fq: _this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
-        q: q,
         fl: _this.timestampField + (query.fl ? ',' + query.fl : ''),
         rows: numRows,
         start: start
       }; // Add fields specific to raw logs and single stat on raw logs
 
       if (query.queryType === 'rawlogs' || query.queryType === 'count' || query.queryType === 'slowQueries') {
-        solrQuery['collectionWindow'] = _this.rawCollectionWindow;
-        solrQuery['startTime'] = startTime;
-        solrQuery['endTime'] = endTime;
-        solrQuery['getRawMessages'] = true;
+        solrQueryParams['collectionWindow'] = _this.rawCollectionWindow;
+        solrQueryParams['startTime'] = startTime;
+        solrQueryParams['endTime'] = endTime;
+        solrQueryParams['getRawMessages'] = true;
       }
 
       if (query.queryType === 'slowQueries') {
-        solrQuery['rex.message.q'] = query.rexQuery;
-        solrQuery['rex.message.outputfields'] = query.rexOutFields;
+        solrQueryParams['rex.message.q'] = query.rexQuery;
+        solrQueryParams['rex.message.outputfields'] = query.rexOutFields;
       } // Set facet fields for heatmap, linechart and count (only in case of multi collection mode due to plugin numFound limitation)
       // TODO: Find out why numFound is returned only after specifying the facet
 
 
       if (query.queryType === 'count' && _this.rawCollectionType === 'multi') {
-        solrQuery['facet'] = true;
-        solrQuery['facet.field'] = 'id';
-        solrQuery['facet.limit'] = 2;
+        solrQueryParams['facet'] = true;
+        solrQueryParams['facet.field'] = 'id';
+        solrQueryParams['facet.limit'] = 2;
       } else if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
         var aggInterval = _this.templateSrv.replace(query.aggInterval, options.scopedVars) || '+1HOUR';
-        solrQuery['facet'] = true;
-        solrQuery['json.facet'] = _this.facets[query.queryType].replace('__AGG_INTERVAL__', aggInterval).replace('__START_TIME__', startTime).replace('__END_TIME__', endTime).replace(/__TOPN__/g, _this.topN).replace('__SCORE_THRESHOLD__', _this.anomalyThreshold);
+        solrQueryParams['facet'] = true;
+        solrQueryParams['json.facet'] = _this.facets[query.queryType].replace('__AGG_INTERVAL__', aggInterval).replace('__START_TIME__', startTime).replace('__END_TIME__', endTime).replace(/__TOPN__/g, _this.topN).replace('__SCORE_THRESHOLD__', _this.anomalyThreshold);
       } else {
-        delete solrQuery['facet'];
-        delete solrQuery['json.facet'];
+        delete solrQueryParams['facet'];
+        delete solrQueryParams['json.facet'];
       } // for cursor to work. Will sort by ts later
 
 
       if (query.queryType === 'chart') {
-        solrQuery['sort'] = 'id asc';
+        solrQueryParams['sort'] = 'id asc';
       } else if (query.sortField) {
-        solrQuery['sort'] = _this.templateSrv.replace(query.sortField, options.scopedVars) + ' ' + _this.templateSrv.replace(query.sortOrder, options.scopedVars);
+        solrQueryParams['sort'] = _this.templateSrv.replace(query.sortField, options.scopedVars) + ' ' + _this.templateSrv.replace(query.sortOrder, options.scopedVars);
       }
 
-      var params = {
+      var httpOpts = {
         url: _this.baseUrl + '/' + collection + '/select?wt=json',
-        method: 'GET',
-        params: solrQuery
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json;charset=utf-8'
+        },
+        params: solrQueryParams,
+        data: solrQueryBody
       };
       var cursor = query.queryType === 'chart' ? '*' : null;
-      return _this.sendQueryRequest([], params, query, cursor); // cursor mark or charts
+      return _this.sendQueryRequest([], httpOpts, query, cursor); // cursor mark or charts
     }).values();
     var series = {};
     var resultSeries = [];
@@ -617,13 +555,6 @@ function (_super) {
           });
         });
       });
-      /*
-      const result = {
-        data: responses.map(response => {
-          return response
-        }),
-      };
-             result.data = _.flatten(result.data);*/
 
       lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(series).forEach(function (key) {
         resultSeries.push({
@@ -669,21 +600,23 @@ function (_super) {
     });
   };
 
-  BoltDatasource.prototype.sendQueryRequest = function (respArr, params, query, cursor) {
+  BoltDatasource.prototype.sendQueryRequest = function (respArr, options, query, cursor) {
+    /*params.method = 'POST';
+    params.headers = { 'Content-Type': 'application/json' };*/
     var _this = this;
 
     if (cursor) {
-      params.params['cursorMark'] = cursor;
+      options.params['cursorMark'] = cursor;
     }
 
-    return this.backendSrv.datasourceRequest(params).then(function (response) {
+    return this.backendSrv.datasourceRequest(options).then(function (response) {
       if (response.status === 200) {
         var groupMap = _this.jobIdMappings;
         var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric, groupMap, JSON.parse(query.groupEnabled), _this.topN);
         respArr.push(processedData);
 
         if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
-          return _this.sendQueryRequest(respArr, params, query, response.data.nextCursorMark);
+          return _this.sendQueryRequest(respArr, options, query, response.data.nextCursorMark);
         } else {
           return respArr;
         }
@@ -722,19 +655,32 @@ function (_super) {
       }
 
       if (dashboards[0] === '$__all') {
-        filterFieldVal = '*';
+        if (!variable || !variable.options || variable.options.length < 2) {
+          filterFieldVal = '';
+        } else {
+          var allPanles = variable.options.slice(1).map(function (opt) {
+            return '"' + opt.text + '"';
+          }).join(' OR ');
+          filterFieldVal = '(' + allPanles + ')';
+        }
       } else {
         dashboards = dashboards.map(function (dashboard) {
-          return encodeURI('"' + dashboard + '"');
+          return '"' + dashboard + '"';
         });
         filterFieldVal = '(' + dashboards.join(' OR ') + ')';
       }
     }
 
-    var url = this.baseUrl + '/' + collection + '/select?q=' + filterField + ': ' + filterFieldVal + '&facet=true&facet.field=' + field + '&wt=json&rows=0';
+    var url = this.baseUrl + '/' + collection + '/select?facet=true&facet.field=' + field + '&wt=json&rows=0&facet.limit=-1';
     var params = {
       url: url,
-      method: 'GET'
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      data: {
+        query: filterField + ': ' + filterFieldVal
+      }
     };
     return this.backendSrv.datasourceRequest(params).then(function (response) {
       if (response.status === 200) {
@@ -759,21 +705,15 @@ function (_super) {
     };
     return this.backendSrv.datasourceRequest(params).then(function (response) {
       if (response.status === 200) {
-        _this.buildJobIdMap(response.data.response.docs);
+        _this.jobIdMappings = {
+          dashboards: {},
+          panels: {}
+        };
+        response.data.response.docs.forEach(function (doc) {
+          _this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
+          _this.jobIdMappings.panels[doc.jobId] = doc.name;
+        });
       }
-    });
-  };
-
-  BoltDatasource.prototype.buildJobIdMap = function (docs) {
-    var _this = this;
-
-    this.jobIdMappings = {
-      dashboards: {},
-      panels: {}
-    };
-    docs.forEach(function (doc) {
-      _this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
-      _this.jobIdMappings.panels[doc.jobId] = doc.name;
     });
   };
 
@@ -825,33 +765,92 @@ function (_super) {
       params: params
     };
     return this.backendSrv.datasourceRequest(options).then(function (data) {
-      var arr = [];
       _this.totalCount = data.data.response.numFound;
-
-      if (data && data.data && data.data.response) {
-        for (var i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
-          arr.push(i);
-        }
-      }
-
-      arr = arr.map(function (ele) {
-        return {
-          text: ele + 1,
-          value: ele
-        };
-      });
-      var firstNResults = arr.slice(0, 10);
-      var lastNResults = arr.splice(arr.length - 11, arr.length - 1);
-
-      if (firstNResults.length === 0 && lastNResults.length === 0) {
-        return [{
-          text: 0,
-          value: 0
-        }];
-      }
-
-      return firstNResults.concat(lastNResults);
+      return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].getFirstAndLastNResults(data, pageSize);
     });
+  };
+
+  BoltDatasource.prototype.getQueryString = function (query, options) {
+    var _this = this;
+
+    var q;
+    var queryStr = this.templateSrv.replace(query.query, options.scopedVars);
+    var matches = queryStr.match(/__dashboard__:\s*(.*)/);
+    var matches2 = queryStr.match(/__panel__:\s*(.*) AND .*/);
+
+    if (!matches2) {
+      matches2 = queryStr.match(/__panel__:\s*(.*)/);
+    }
+
+    if (matches && matches.length === 2) {
+      // Dashboard case
+      var dahsboardName_1 = matches[1];
+
+      if (dahsboardName_1 === '*') {
+        q = queryStr.replace('__dashboard__', 'jobId');
+      } else if (dahsboardName_1.startsWith('{')) {
+        // All option
+        var jobIdList_1 = [];
+        var dashboards = dahsboardName_1.replace('{', '').replace('}', '').split(',');
+        dashboards.forEach(function (dashboard) {
+          var jobId = Object.keys(_this.jobIdMappings.dashboards).filter(function (jobId) {
+            return _this.jobIdMappings.dashboards[jobId] === dashboard;
+          });
+
+          if (jobId) {
+            jobId.forEach(function (job) {
+              return jobIdList_1.push(job);
+            });
+          }
+        });
+        var jobIdStr = '(' + jobIdList_1.join(' OR ') + ')';
+        q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
+      } else {
+        // particular option
+        var jobIdList = Object.keys(this.jobIdMappings.dashboards).filter(function (jobId) {
+          return _this.jobIdMappings.dashboards[jobId] === dahsboardName_1;
+        });
+        var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
+        q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
+      }
+
+      q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(q);
+    } else if (matches2 && matches2.length === 2) {
+      // Panel case
+      var panelName_1 = matches2[1];
+
+      if (panelName_1 === '*') {
+        q = queryStr.replace('__panel__', 'jobId');
+      } else if (panelName_1.startsWith('{')) {
+        // All option
+        var jobIdList_2 = [];
+        var panels = panelName_1.replace('{', '').replace('}', '').split(',');
+        panels.forEach(function (panel) {
+          var jobId = Object.keys(_this.jobIdMappings.panels).filter(function (jobId) {
+            return _this.jobIdMappings.panels[jobId] === panel;
+          });
+
+          if (jobId) {
+            jobIdList_2.push(jobId);
+          }
+        });
+        var jobIdStr = '(' + jobIdList_2.join(' OR ') + ')';
+        q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
+      } else {
+        // particular option
+        var jobIdList = Object.keys(this.jobIdMappings.panels).filter(function (jobId) {
+          return _this.jobIdMappings.panels[jobId] === panelName_1;
+        });
+        var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
+        q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
+      }
+
+      q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(q);
+    } else {
+      q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(queryStr);
+    }
+
+    return q;
   };
 
   return BoltDatasource;
@@ -906,6 +905,7 @@ function () {
 
     if (data.facets && data.facets.lineChartFacet) {
       seriesList = [];
+      var sortBaselineSeries_1 = [];
       var jobs = data.facets.lineChartFacet.buckets;
       jobs.forEach(function (job) {
         var partFields = job.group.buckets;
@@ -959,6 +959,11 @@ function () {
           seriesList.push({
             target: jobIdWithPartField + ' score',
             datapoints: scoreSeries
+          }); //Sort baseline is score value.
+
+          sortBaselineSeries_1.push({
+            target: jobIdWithPartField,
+            datapoints: scoreSeries
           });
           seriesList.push({
             target: jobIdWithPartField + ' anomaly',
@@ -970,6 +975,8 @@ function () {
           });
         });
       });
+      sortBaselineSeries_1 = this.sortList(sortBaselineSeries_1, topN);
+      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries_1);
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       var jobs = data.facets.correlation.buckets;
@@ -1237,20 +1244,37 @@ function () {
     if (result.data && result.data.facet_counts) {
       var ar = [];
 
-      for (var key in result.data.facet_counts.facet_fields) {
+      var _loop_1 = function _loop_1(key) {
         if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
-          var array = result.data.facet_counts.facet_fields[key];
+          var array_1 = result.data.facet_counts.facet_fields[key];
 
-          for (var i = 0; i < array.length; i += 2) {
+          var _loop_2 = function _loop_2(i) {
             // take every second element
-            if (array[i + 1] > 0) {
+            if (array_1[i + 1] > 0 && !ar.find(function (ele) {
+              return ele.text === array_1[i];
+            })) {
+              var text = array_1[i];
+              var detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
+
+              if (detectorPatternMatches) {
+                text = '"' + detectorPatternMatches[1] + '"';
+              }
+
               ar.push({
-                text: array[i],
+                text: text,
                 expandable: false
               });
             }
+          };
+
+          for (var i = 0; i < array_1.length; i += 2) {
+            _loop_2(i);
           }
         }
+      };
+
+      for (var key in result.data.facet_counts.facet_fields) {
+        _loop_1(key);
       }
 
       return ar;
@@ -1264,6 +1288,34 @@ function () {
         };
       });
     }
+  };
+
+  Utils.getFirstAndLastNResults = function (data, pageSize) {
+    var arr = [];
+
+    if (data && data.data && data.data.response) {
+      for (var i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
+        arr.push(i);
+      }
+    }
+
+    arr = arr.map(function (ele) {
+      return {
+        text: ele + 1,
+        value: ele
+      };
+    });
+    var firstNResults = arr.slice(0, 10);
+    var lastNResults = arr.splice(arr.length - 11, arr.length - 1);
+
+    if (firstNResults.length === 0 && lastNResults.length === 0) {
+      return [{
+        text: 0,
+        value: 0
+      }];
+    }
+
+    return firstNResults.concat(lastNResults);
   };
 
   Utils.sortList = function (seriesList, top) {
@@ -1290,6 +1342,20 @@ function () {
     }
 
     return seriesList;
+  };
+
+  Utils.getSortedSeries = function (seriesToSort, baselineSeries) {
+    var resultSeries = [];
+    var seriesSuffixes = [' actual', ' expected', ' score', ' anomaly'];
+    baselineSeries.forEach(function (baselineSer) {
+      var seriesName = baselineSer.target;
+      seriesSuffixes.forEach(function (suffix) {
+        resultSeries.push(seriesToSort.find(function (s) {
+          return s.target === seriesName + suffix;
+        }));
+      });
+    });
+    return resultSeries;
   };
 
   Utils.getStdDev = function (series) {

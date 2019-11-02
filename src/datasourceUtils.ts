@@ -34,6 +34,7 @@ export class Utils {
     // Process line chart facet response
     if (data.facets && data.facets.lineChartFacet) {
       seriesList = [];
+      let sortBaselineSeries: any[] = [];
       const jobs = data.facets.lineChartFacet.buckets;
       jobs.forEach((job: any) => {
         const partFields = job.group.buckets;
@@ -86,6 +87,11 @@ export class Utils {
             target: jobIdWithPartField + ' score',
             datapoints: scoreSeries,
           });
+          //Sort baseline is score value.
+          sortBaselineSeries.push({
+            target: jobIdWithPartField,
+            datapoints: scoreSeries,
+          });
           seriesList.push({
             target: jobIdWithPartField + ' anomaly',
             datapoints: anomalySeries,
@@ -96,6 +102,8 @@ export class Utils {
           });
         });
       });
+      sortBaselineSeries = this.sortList(sortBaselineSeries, topN);
+      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries);
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       const jobs = data.facets.correlation.buckets;
@@ -355,15 +363,25 @@ export class Utils {
       });
     }
     if (result.data && result.data.facet_counts) {
-      const ar = [];
+      const ar: any[] = [];
       for (const key in result.data.facet_counts.facet_fields) {
         if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
           const array = result.data.facet_counts.facet_fields[key];
           for (let i = 0; i < array.length; i += 2) {
             // take every second element
-            if (array[i + 1] > 0) {
+            if (
+              array[i + 1] > 0 &&
+              !ar.find(ele => {
+                return ele.text === array[i];
+              })
+            ) {
+              let text = array[i];
+              const detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
+              if (detectorPatternMatches) {
+                text = '"' + detectorPatternMatches[1] + '"';
+              }
               ar.push({
-                text: array[i],
+                text: text,
                 expandable: false,
               });
             }
@@ -383,6 +401,34 @@ export class Utils {
           };
         });
     }
+  }
+
+  static getFirstAndLastNResults(data: any, pageSize: any) {
+    let arr: any[] = [];
+    if (data && data.data && data.data.response) {
+      for (let i = 0; i < Math.round(data.data.response.numFound / Number(pageSize.query)); i++) {
+        arr.push(i);
+      }
+    }
+    arr = arr.map(ele => {
+      return {
+        text: ele + 1,
+        value: ele,
+      };
+    });
+    const firstNResults = arr.slice(0, 10);
+    const lastNResults = arr.splice(arr.length - 11, arr.length - 1);
+
+    if (firstNResults.length === 0 && lastNResults.length === 0) {
+      return [
+        {
+          text: 0,
+          value: 0,
+        },
+      ];
+    }
+
+    return firstNResults.concat(lastNResults);
   }
 
   static sortList(seriesList: any[], top?: number) {
@@ -409,6 +455,23 @@ export class Utils {
     }
 
     return seriesList;
+  }
+
+  static getSortedSeries(seriesToSort: any[], baselineSeries: any[]): any[] {
+    const resultSeries: any[] = [];
+    const seriesSuffixes = [' actual', ' expected', ' score', ' anomaly'];
+    baselineSeries.forEach(baselineSer => {
+      const seriesName = baselineSer.target;
+      seriesSuffixes.forEach(suffix => {
+        resultSeries.push(
+          seriesToSort.find(s => {
+            return s.target === seriesName + suffix;
+          })
+        );
+      });
+    });
+
+    return resultSeries;
   }
 
   static getStdDev(series: number[]) {
