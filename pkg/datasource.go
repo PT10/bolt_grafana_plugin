@@ -17,11 +17,11 @@ type BoltDatasource struct {
 	logger hclog.Logger
 }
 
-const indvAnomalyFacet = `{\"lineChartFacet\":{\"numBuckets\":true,\"offset\":0,\"limit\":__TOPN__,\"type\":\"terms\",\"field\":\"jobId\",\"facet\":{\"group\":{\"numBuckets\":true,
-\"offset\":0,\"limit\":__TOPN__,\"type\":\"terms\",\"field\":\"partition_fields\",\"sort\":\"s desc\",\"ss\":\"sum(s)\",\"facet\":{\"s\":\"max(score_value)\",
-\"timestamp\":{\"type\":\"terms\",\"limit\":-1,\"field\":\"timestamp\",\"facet\":{\"actual\":{\"type\":\"terms\",\"field\":\"actual_value\"},
-\"score\":{\"type\":\"terms\",\"field\":\"score_value\"},\"anomaly\":{\"type\":\"terms\",\"field\":\"is_anomaly\"},
-\"expected\":{\"type\":\"terms\",\"field\":\"expected_value\"}}}}}}}}`
+const indvAnomalyFacet = `{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":20,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,
+"offset":0,"limit":20,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",
+"timestamp":{"type":"terms","limit":-1,"field":"timestamp","facet":{"actual":{"type":"terms","field":"actual_value"},
+"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},
+"expected":{"type":"terms","field":"expected_value"}}}}}}}}`
 
 func (ds *BoltDatasource) Query(ctx context.Context, tsdbReq *datasource.DatasourceRequest) (*datasource.DatasourceResponse, error) {
 	ds.logger.Info("Query", "datasource", tsdbReq.Datasource.Name, "TimeRange", tsdbReq.TimeRange)
@@ -65,7 +65,7 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 	}
 	outFields = processedoutFields
 
-	collection := modelJson.Get("collection").MustString()
+	collection := modelJson.Get("collection").MustString("bolt_an")
 	query := modelJson.Get("query").MustString()
 	fl := "timestamp," + modelJson.Get("fl").MustString()
 	rbody := modelJson.Get("data")
@@ -111,20 +111,20 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 
 func (ds *BoltDatasource) ParseSearchResponse(body []byte, fields []string, qType string) (*datasource.DatasourceResponse, error) {
 	var resultSeries map[string]datasource.TimeSeries = make(map[string]datasource.TimeSeries)
-	for _, v := range fields {
-		resultSeries[v] = datasource.TimeSeries{
-			Name:   v,
-			Points: make([]*datasource.Point, 0),
-		}
-	}
 
 	if qType != "indvAnomaly" {
-		err := ParseChartResponse(body, resultSeries, fields)
+		for _, v := range fields {
+			resultSeries[v] = datasource.TimeSeries{
+				Name:   v,
+				Points: make([]*datasource.Point, 0),
+			}
+		}
+		err := ds.ParseChartResponse(body, resultSeries, fields)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		err := ParseIndvAnomalyFacetResponse(body, resultSeries, fields)
+		err := ds.ParseIndvAnomalyFacetResponse(body, resultSeries, fields)
 		if err != nil {
 			return nil, err
 		}
