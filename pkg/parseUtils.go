@@ -8,22 +8,24 @@ import (
 	"github.com/grafana/grafana-plugin-model/go/datasource"
 )
 
-func (ds *BoltDatasource) ParseChartResponse(body []byte, resultSeries map[string]datasource.TimeSeries, fields []string) error {
+func (ds *BoltDatasource) ParseChartResponse(body []byte, resultSeries map[string]datasource.TimeSeries, fields []string, cursor string) (string, error) {
 	jBody, err := simplejson.NewJson(body)
 	if err != nil {
-		return err
+		return cursor, err
 	}
+
+	nextCursorMark := jBody.Get("nextCursorMark").MustString(cursor)
 
 	arr := jBody.Get("response").Get("docs").MustArray()
 	for _, v := range arr {
 		j, err := json.Marshal(v)
 		if err != nil {
-			return err
+			return nextCursorMark, err
 		}
 
 		doc, err := simplejson.NewJson(j)
 		if err != nil {
-			return err
+			return nextCursorMark, err
 		}
 
 		for _, v := range fields {
@@ -42,7 +44,7 @@ func (ds *BoltDatasource) ParseChartResponse(body []byte, resultSeries map[strin
 			resultSeries[v] = tmp
 		}
 	}
-	return nil
+	return nextCursorMark, nil
 }
 
 func (ds *BoltDatasource) ParseIndvAnomalyFacetResponse(body []byte, resultSeries map[string]datasource.TimeSeries, fields []string) error {

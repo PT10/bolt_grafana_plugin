@@ -30,20 +30,52 @@ func (ds *BoltDatasource) Query(ctx context.Context, tsdbReq *datasource.Datasou
 }
 
 func (ds *BoltDatasource) SearchQuery(ctx context.Context, tsdbReq *datasource.DatasourceRequest) (*datasource.DatasourceResponse, error) {
-	remoteDsReq, outFields, qType, err := ds.CreateSearchRequest(tsdbReq)
-	if err != nil {
-		return nil, err
+	var resultSeries map[string]datasource.TimeSeries = make(map[string]datasource.TimeSeries)
+
+	var cursorMark string = "*"
+	var nextCursorMark string
+	done := false
+	for !done {
+		remoteDsReq, outFields, qType, err := ds.CreateSearchRequest(tsdbReq, cursorMark)
+		if err != nil {
+			return nil, err
+		}
+
+		body, err := ds.MakeHttpRequest(ctx, remoteDsReq)
+		if err != nil {
+			return nil, err
+		}
+
+		nextCursorMark, err = ds.ParseSearchResponse(body, resultSeries, outFields, qType, cursorMark)
+		if err != nil {
+			return nil, err
+		}
+
+		if cursorMark == nextCursorMark {
+			ds.logger.Debug("Found end of records", cursorMark, nextCursorMark)
+			done = true
+		}
+		cursorMark = nextCursorMark
 	}
 
-	body, err := ds.MakeHttpRequest(ctx, remoteDsReq)
-	if err != nil {
-		return nil, err
+	values := make([]*datasource.TimeSeries, 0, len(resultSeries))
+
+	for _, v := range resultSeries {
+		var val = v
+		values = append(values, &val)
 	}
 
-	return ds.ParseSearchResponse(body, outFields, qType)
+	return &datasource.DatasourceResponse{
+		Results: []*datasource.QueryResult{
+			&datasource.QueryResult{
+				RefId:  "search",
+				Series: values,
+			},
+		},
+	}, nil
 }
 
-func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequest) (*RemoteDatasourceRequest, []string, string, error) {
+func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequest, cursor string) (*RemoteDatasourceRequest, []string, string, error) {
 	modelJson, err := simplejson.NewJson([]byte(tsdbReq.Queries[0].ModelJson))
 	if err != nil {
 		return nil, nil, "", err
@@ -70,7 +102,7 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 	fl := "timestamp," + modelJson.Get("fl").MustString()
 	rbody := modelJson.Get("data")
 	//refId := modelJson.Get("refId")
-	qType := modelJson.Get("queryType").MustString("Chart")
+	qType := modelJson.Get("queryType").MustString("chart")
 
 	urlStr := tsdbReq.Datasource.Url + "/solr/" + collection + "/select"
 
@@ -86,9 +118,13 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 		outFields = []string{modelJson.Get("indvAnOutField").MustString("all")}
 		parameters.Add("facet", "true")
 		parameters.Add("json.facet", indvAnomalyFacet)
-	} else {
+	} else if qType == "chart" {
 		parameters.Add("fl", fl)
-		parameters.Add("rows", "10")
+		parameters.Add("rows", "1000")
+		parameters.Add("cursorMark", cursor)
+		parameters.Add("sort", "id asc")
+	} else {
+
 	}
 
 	Url.RawQuery = parameters.Encode()
@@ -109,40 +145,30 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 	}, outFields, qType, nil
 }
 
-func (ds *BoltDatasource) ParseSearchResponse(body []byte, fields []string, qType string) (*datasource.DatasourceResponse, error) {
-	var resultSeries map[string]datasource.TimeSeries = make(map[string]datasource.TimeSeries)
-
+func (ds *BoltDatasource) ParseSearchResponse(body []byte, resultSeries map[string]datasource.TimeSeries, fields []string, qType string, cursor string) (string, error) { //(*datasource.DatasourceResponse, error) {
+	var nextCursorMark string
+	var err error
 	if qType != "indvAnomaly" {
 		for _, v := range fields {
-			resultSeries[v] = datasource.TimeSeries{
-				Name:   v,
-				Points: make([]*datasource.Point, 0),
+			if resultSeries[v].Name == "" {
+				resultSeries[v] = datasource.TimeSeries{
+					Name:   v,
+					Points: make([]*datasource.Point, 0),
+				}
 			}
 		}
-		err := ds.ParseChartResponse(body, resultSeries, fields)
+		nextCursorMark, err = ds.ParseChartResponse(body, resultSeries, fields, cursor)
 		if err != nil {
-			return nil, err
+			return nextCursorMark, err
 		}
+		ds.logger.Debug("ParseSearchResponse", "Next cursor mark", nextCursorMark)
 	} else {
-		err := ds.ParseIndvAnomalyFacetResponse(body, resultSeries, fields)
+		nextCursorMark = cursor
+		err = ds.ParseIndvAnomalyFacetResponse(body, resultSeries, fields)
 		if err != nil {
-			return nil, err
+			return cursor, err
 		}
 	}
 
-	values := make([]*datasource.TimeSeries, 0, len(resultSeries))
-
-	for _, v := range resultSeries {
-		var val = v
-		values = append(values, &val)
-	}
-
-	return &datasource.DatasourceResponse{
-		Results: []*datasource.QueryResult{
-			&datasource.QueryResult{
-				RefId:  "search",
-				Series: values,
-			},
-		},
-	}, nil
+	return nextCursorMark, nil
 }
