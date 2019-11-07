@@ -81,9 +81,9 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 	parameters.Add("wt", "json")
 	parameters.Add("q", query)
 	parameters.Add("fq", "timestamp:["+fromTime+" TO "+toTime+"]")
-	//parameters.Add("fq", "timestamp:[2019-10-15T00:00:00Z TO 2019-10-15T04:03:00Z]")
 
 	if qType == "indvAnomaly" {
+		outFields = []string{modelJson.Get("indvAnOutField").MustString("all")}
 		parameters.Add("facet", "true")
 		parameters.Add("json.facet", indvAnomalyFacet)
 	} else {

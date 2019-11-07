@@ -25,6 +25,7 @@ export class Utils {
     correlationMetric: string,
     groupMap: any,
     grouppingEmabled: boolean,
+    indvAnOutField: string,
     topN: number
   ) {
     const data = response.data;
@@ -103,7 +104,7 @@ export class Utils {
         });
       });
       sortBaselineSeries = this.sortList(sortBaselineSeries, topN);
-      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries);
+      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries, indvAnOutField);
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       const jobs = data.facets.correlation.buckets;
@@ -457,9 +458,9 @@ export class Utils {
     return seriesList;
   }
 
-  static getSortedSeries(seriesToSort: any[], baselineSeries: any[]): any[] {
+  static getSortedSeries(seriesToSort: any[], baselineSeries: any[], indvAnOutField: string): any[] {
     const resultSeries: any[] = [];
-    const seriesSuffixes = [' actual', ' expected', ' score', ' anomaly'];
+    const seriesSuffixes = indvAnOutField === 'all' ? [' actual', ' expected', ' score', ' anomaly'] : [' ' + indvAnOutField];
     baselineSeries.forEach(baselineSer => {
       const seriesName = baselineSer.target;
       seriesSuffixes.forEach(suffix => {

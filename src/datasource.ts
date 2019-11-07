@@ -321,6 +321,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
             query.baseMetric,
             groupMap,
             JSON.parse(query.groupEnabled),
+            query.indvAnOutField,
             this.topN
           );
 

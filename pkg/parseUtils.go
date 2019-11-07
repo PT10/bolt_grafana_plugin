@@ -46,6 +46,11 @@ func (ds *BoltDatasource) ParseChartResponse(body []byte, resultSeries map[strin
 }
 
 func (ds *BoltDatasource) ParseIndvAnomalyFacetResponse(body []byte, resultSeries map[string]datasource.TimeSeries, fields []string) error {
+	outField := fields[0]
+	if fields[0] == "all" {
+		outField = "score"
+	}
+
 	jBody, err := simplejson.NewJson(body)
 	if err != nil {
 		return err
@@ -100,7 +105,7 @@ func (ds *BoltDatasource) ParseIndvAnomalyFacetResponse(body []byte, resultSerie
 				ts := aggrFieldsTsBucketObj.Get("val").MustString()
 				unixTs, _ := time.Parse("2006-01-02T15:04:05-0700", ts)
 
-				scoreArr := aggrFieldsTsBucketObj.Get("score").Get("buckets").MustArray()
+				scoreArr := aggrFieldsTsBucketObj.Get(outField).Get("buckets").MustArray()
 
 				l, err := json.Marshal(scoreArr[0])
 				if err != nil {

@@ -612,7 +612,7 @@ function (_super) {
     return this.backendSrv.datasourceRequest(options).then(function (response) {
       if (response.status === 200) {
         var groupMap = _this.jobIdMappings;
-        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric, groupMap, JSON.parse(query.groupEnabled), _this.topN);
+        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric, groupMap, JSON.parse(query.groupEnabled), query.indvAnOutField, _this.topN);
         respArr.push(processedData);
 
         if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
@@ -896,7 +896,7 @@ var Utils =
 function () {
   function Utils() {}
 
-  Utils.processResponse = function (response, format, timeField, anomalyThreshold, correlationMetric, groupMap, grouppingEmabled, topN) {
+  Utils.processResponse = function (response, format, timeField, anomalyThreshold, correlationMetric, groupMap, grouppingEmabled, indvAnOutField, topN) {
     var _this = this;
 
     var data = response.data;
@@ -976,7 +976,7 @@ function () {
         });
       });
       sortBaselineSeries_1 = this.sortList(sortBaselineSeries_1, topN);
-      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries_1);
+      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries_1, indvAnOutField);
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       var jobs = data.facets.correlation.buckets;
@@ -1344,9 +1344,9 @@ function () {
     return seriesList;
   };
 
-  Utils.getSortedSeries = function (seriesToSort, baselineSeries) {
+  Utils.getSortedSeries = function (seriesToSort, baselineSeries, indvAnOutField) {
     var resultSeries = [];
-    var seriesSuffixes = [' actual', ' expected', ' score', ' anomaly'];
+    var seriesSuffixes = indvAnOutField === 'all' ? [' actual', ' expected', ' score', ' anomaly'] : [' ' + indvAnOutField];
     baselineSeries.forEach(function (baselineSer) {
       var seriesName = baselineSer.target;
       seriesSuffixes.forEach(function (suffix) {
@@ -1521,7 +1521,8 @@ function (_super) {
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
       baseMetric: query.baseMetric,
       groupEnabled: query.groupEnabled || 'false',
-      aggInterval: query.aggInterval || '+1HOUR'
+      aggInterval: query.aggInterval || '+1HOUR',
+      indvAnOutField: query.indvAnOutField || 'all'
     });
     var onChange = _this.props.onChange;
     onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, _this.state));
@@ -1569,7 +1570,8 @@ function (_super) {
         rexOutFields = _a.rexOutFields,
         baseMetric = _a.baseMetric,
         groupEnabled = _a.groupEnabled,
-        aggInterval = _a.aggInterval;
+        aggInterval = _a.aggInterval,
+        indvAnOutField = _a.indvAnOutField;
     var labelWidth = 8;
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
@@ -1610,7 +1612,26 @@ function (_super) {
       value: 'true'
     }, 'true'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
       value: 'false'
-    }, 'false'))), (queryType === 'aggAnomaly' || queryType === 'aggAnomalyByPartFields') && // <div className="gf-form">
+    }, 'false'))), queryType === 'indvAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormLabel"], {
+      width: labelWidth
+    }, "Out Field"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
+      value: indvAnOutField,
+      onChange: function onChange(event) {
+        _this.onFieldValueChange(event, 'indvAnOutField');
+      }
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'all'
+    }, 'All'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'actual'
+    }, 'Actual'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'score'
+    }, 'Score'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'expected'
+    }, 'Expected'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'anomaly'
+    }, 'Anomaly'))), (queryType === 'aggAnomaly' || queryType === 'aggAnomalyByPartFields') && // <div className="gf-form">
     //   <FormLabel width={14}>Aggregation Level</FormLabel>
     //   <select
     //     value={aggInterval}
