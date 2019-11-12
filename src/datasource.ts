@@ -361,30 +361,46 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
     const variable = this.templateSrv.variables.find((v: any) => v.name === filterFieldVal);
     if (variable) {
-      let dashboards: string[] = [];
+      let resolvedFilterValues: string[] = [];
       if (typeof variable.current.value !== 'object') {
-        dashboards.push(variable.current.value);
+        resolvedFilterValues.push(variable.current.value);
       } else {
-        dashboards = variable.current.value;
+        resolvedFilterValues = variable.current.value;
       }
 
-      if (dashboards[0] === '$__all') {
+      if (resolvedFilterValues[0] === '$__all') {
         if (!variable || !variable.options || variable.options.length < 2) {
           filterFieldVal = '';
         } else {
-          const allPanles = variable.options
+          const allValues = variable.options
             .slice(1)
             .map((opt: any) => {
-              return '"' + opt.text + '"';
+              let fieldName = opt.text;
+              if (filterField === 'jobId') {
+                Object.keys(this.jobIdMappings.panels).forEach((k: string) => {
+                  if (this.jobIdMappings.panels[k] === fieldName) {
+                    fieldName = k;
+                  }
+                });
+              }
+              return fieldName;
             })
             .join(' OR ');
-          filterFieldVal = '(' + allPanles + ')';
+          filterFieldVal = '(' + allValues + ')';
         }
       } else {
-        dashboards = dashboards.map(dashboard => {
-          return '"' + dashboard + '"';
+        resolvedFilterValues = resolvedFilterValues.map(dashboard => {
+          let fieldName = dashboard;
+          if (filterField === 'jobId') {
+            Object.keys(this.jobIdMappings.panels).forEach((k: string) => {
+              if (this.jobIdMappings.panels[k] === fieldName) {
+                fieldName = k;
+              }
+            });
+          }
+          return fieldName;
         });
-        filterFieldVal = '(' + dashboards.join(' OR ') + ')';
+        filterFieldVal = '(' + resolvedFilterValues.join(' OR ') + ')';
       }
     }
 
@@ -420,8 +436,8 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       if (response.status === 200) {
         this.jobIdMappings = { dashboards: {}, panels: {} };
         response.data.response.docs.forEach((doc: any) => {
-          this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
-          this.jobIdMappings.panels[doc.jobId] = doc.name;
+          this.jobIdMappings.dashboards[doc.jobId] = '"' + doc.searchGroup[0] + '"';
+          this.jobIdMappings.panels[doc.jobId] = '"' + doc.name + '"';
         });
       }
     });

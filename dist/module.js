@@ -637,6 +637,8 @@ function (_super) {
   };
 
   BoltDatasource.prototype.getFields = function (matches) {
+    var _this = this;
+
     var collection = matches[1];
     var filterField = matches[2];
     var filterFieldVal = matches[3].replace('$', '');
@@ -646,28 +648,48 @@ function (_super) {
     });
 
     if (variable) {
-      var dashboards = [];
+      var resolvedFilterValues = [];
 
       if (_typeof(variable.current.value) !== 'object') {
-        dashboards.push(variable.current.value);
+        resolvedFilterValues.push(variable.current.value);
       } else {
-        dashboards = variable.current.value;
+        resolvedFilterValues = variable.current.value;
       }
 
-      if (dashboards[0] === '$__all') {
+      if (resolvedFilterValues[0] === '$__all') {
         if (!variable || !variable.options || variable.options.length < 2) {
           filterFieldVal = '';
         } else {
-          var allPanles = variable.options.slice(1).map(function (opt) {
-            return '"' + opt.text + '"';
+          var allValues = variable.options.slice(1).map(function (opt) {
+            var fieldName = opt.text;
+
+            if (filterField === 'jobId') {
+              Object.keys(_this.jobIdMappings.panels).forEach(function (k) {
+                if (_this.jobIdMappings.panels[k] === fieldName) {
+                  fieldName = k;
+                }
+              });
+            }
+
+            return fieldName;
           }).join(' OR ');
-          filterFieldVal = '(' + allPanles + ')';
+          filterFieldVal = '(' + allValues + ')';
         }
       } else {
-        dashboards = dashboards.map(function (dashboard) {
-          return '"' + dashboard + '"';
+        resolvedFilterValues = resolvedFilterValues.map(function (dashboard) {
+          var fieldName = dashboard;
+
+          if (filterField === 'jobId') {
+            Object.keys(_this.jobIdMappings.panels).forEach(function (k) {
+              if (_this.jobIdMappings.panels[k] === fieldName) {
+                fieldName = k;
+              }
+            });
+          }
+
+          return fieldName;
         });
-        filterFieldVal = '(' + dashboards.join(' OR ') + ')';
+        filterFieldVal = '(' + resolvedFilterValues.join(' OR ') + ')';
       }
     }
 
@@ -710,8 +732,8 @@ function (_super) {
           panels: {}
         };
         response.data.response.docs.forEach(function (doc) {
-          _this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
-          _this.jobIdMappings.panels[doc.jobId] = doc.name;
+          _this.jobIdMappings.dashboards[doc.jobId] = '"' + doc.searchGroup[0] + '"';
+          _this.jobIdMappings.panels[doc.jobId] = '"' + doc.name + '"';
         });
       }
     });
@@ -1245,31 +1267,33 @@ function () {
       var ar = [];
 
       var _loop_1 = function _loop_1(key) {
-        if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
-          var array_1 = result.data.facet_counts.facet_fields[key];
+        if (!result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
+          return "continue";
+        }
 
-          var _loop_2 = function _loop_2(i) {
-            // take every second element
-            if (array_1[i + 1] > 0 && !ar.find(function (ele) {
-              return ele.text === array_1[i];
-            })) {
-              var text = array_1[i];
-              var detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
+        var array = result.data.facet_counts.facet_fields[key];
 
-              if (detectorPatternMatches) {
-                text = '"' + detectorPatternMatches[1] + '"';
-              }
+        var _loop_2 = function _loop_2(i) {
+          // take every second element
+          if (array[i + 1] > 0 && !ar.find(function (ele) {
+            return ele.text === array[i];
+          })) {
+            var text = array[i];
+            var detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
 
-              ar.push({
-                text: text,
-                expandable: false
-              });
+            if (detectorPatternMatches) {
+              text = detectorPatternMatches[1];
             }
-          };
 
-          for (var i = 0; i < array_1.length; i += 2) {
-            _loop_2(i);
+            ar.push({
+              text: '"' + text + '"',
+              expandable: false
+            });
           }
+        };
+
+        for (var i = 0; i < array.length; i += 2) {
+          _loop_2(i);
         }
       };
 
