@@ -58,6 +58,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       baseMetric: query.baseMetric,
       groupEnabled: query.groupEnabled || 'false',
       aggInterval: query.aggInterval || '+1HOUR',
+      indvAnOutField: query.indvAnOutField || 'all',
     };
 
     const { onChange } = this.props;
@@ -120,6 +121,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       baseMetric,
       groupEnabled,
       aggInterval,
+      indvAnOutField,
     } = this.state;
     const labelWidth = 8;
 
@@ -164,6 +166,24 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               >
                 <option value={'true'}>{'true'}</option>
                 <option value={'false'}>{'false'}</option>
+              </select>
+            </div>
+          )}
+          {/* Show out fields for individual anomalies (alerts requirement) */}
+          {queryType === 'indvAnomaly' && (
+            <div className="gf-form">
+              <FormLabel width={labelWidth}>Out Field</FormLabel>
+              <select
+                value={indvAnOutField}
+                onChange={(event: any) => {
+                  this.onFieldValueChange(event, 'indvAnOutField');
+                }}
+              >
+                <option value={'all'}>{'All'}</option>
+                <option value={'actual'}>{'Actual'}</option>
+                <option value={'score'}>{'Score'}</option>
+                <option value={'expected'}>{'Expected'}</option>
+                <option value={'anomaly'}>{'Anomaly'}</option>
               </select>
             </div>
           )}

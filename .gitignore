@@ -1,3 +1,4 @@
 deployBolt.sh
 .DS_Store
 node_modules
+go_modules

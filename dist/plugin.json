@@ -3,6 +3,9 @@
   "name": "Bolt",
   "id": "boltanalytics-solr-datasource",
   "metrics": true,
+  "backend": true,
+  "alerting": true,
+  "executable": "boltanalytics-backend-plugin",
 
   "info": {
     "description": "Bolt datasource",
@@ -20,7 +23,7 @@
     ],
     "screenshots": [],
     "version": "1.0.0",
-    "updated": "2019-11-01"
+    "updated": "2019-11-11"
   },
 
   "dependencies": {

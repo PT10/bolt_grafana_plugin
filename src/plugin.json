@@ -3,6 +3,9 @@
   "name": "Bolt",
   "id": "boltanalytics-solr-datasource",
   "metrics": true,
+  "backend": true,
+  "alerting": true,
+  "executable": "boltanalytics-backend-plugin",
 
   "info": {
     "description": "Bolt datasource",

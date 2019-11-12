@@ -612,7 +612,7 @@ function (_super) {
     return this.backendSrv.datasourceRequest(options).then(function (response) {
       if (response.status === 200) {
         var groupMap = _this.jobIdMappings;
-        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric, groupMap, JSON.parse(query.groupEnabled), _this.topN);
+        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric, groupMap, JSON.parse(query.groupEnabled), query.indvAnOutField, _this.topN);
         respArr.push(processedData);
 
         if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
@@ -637,6 +637,8 @@ function (_super) {
   };
 
   BoltDatasource.prototype.getFields = function (matches) {
+    var _this = this;
+
     var collection = matches[1];
     var filterField = matches[2];
     var filterFieldVal = matches[3].replace('$', '');
@@ -646,28 +648,48 @@ function (_super) {
     });
 
     if (variable) {
-      var dashboards = [];
+      var resolvedFilterValues = [];
 
       if (_typeof(variable.current.value) !== 'object') {
-        dashboards.push(variable.current.value);
+        resolvedFilterValues.push(variable.current.value);
       } else {
-        dashboards = variable.current.value;
+        resolvedFilterValues = variable.current.value;
       }
 
-      if (dashboards[0] === '$__all') {
+      if (resolvedFilterValues[0] === '$__all') {
         if (!variable || !variable.options || variable.options.length < 2) {
           filterFieldVal = '';
         } else {
-          var allPanles = variable.options.slice(1).map(function (opt) {
-            return '"' + opt.text + '"';
+          var allValues = variable.options.slice(1).map(function (opt) {
+            var fieldName = opt.text;
+
+            if (filterField === 'jobId') {
+              Object.keys(_this.jobIdMappings.panels).forEach(function (k) {
+                if (_this.jobIdMappings.panels[k] === fieldName) {
+                  fieldName = k;
+                }
+              });
+            }
+
+            return fieldName;
           }).join(' OR ');
-          filterFieldVal = '(' + allPanles + ')';
+          filterFieldVal = '(' + allValues + ')';
         }
       } else {
-        dashboards = dashboards.map(function (dashboard) {
-          return '"' + dashboard + '"';
+        resolvedFilterValues = resolvedFilterValues.map(function (dashboard) {
+          var fieldName = dashboard;
+
+          if (filterField === 'jobId') {
+            Object.keys(_this.jobIdMappings.panels).forEach(function (k) {
+              if (_this.jobIdMappings.panels[k] === fieldName) {
+                fieldName = k;
+              }
+            });
+          }
+
+          return fieldName;
         });
-        filterFieldVal = '(' + dashboards.join(' OR ') + ')';
+        filterFieldVal = '(' + resolvedFilterValues.join(' OR ') + ')';
       }
     }
 
@@ -710,8 +732,8 @@ function (_super) {
           panels: {}
         };
         response.data.response.docs.forEach(function (doc) {
-          _this.jobIdMappings.dashboards[doc.jobId] = doc.searchGroup[0];
-          _this.jobIdMappings.panels[doc.jobId] = doc.name;
+          _this.jobIdMappings.dashboards[doc.jobId] = '"' + doc.searchGroup[0] + '"';
+          _this.jobIdMappings.panels[doc.jobId] = '"' + doc.name + '"';
         });
       }
     });
@@ -896,7 +918,7 @@ var Utils =
 function () {
   function Utils() {}
 
-  Utils.processResponse = function (response, format, timeField, anomalyThreshold, correlationMetric, groupMap, grouppingEmabled, topN) {
+  Utils.processResponse = function (response, format, timeField, anomalyThreshold, correlationMetric, groupMap, grouppingEmabled, indvAnOutField, topN) {
     var _this = this;
 
     var data = response.data;
@@ -976,7 +998,7 @@ function () {
         });
       });
       sortBaselineSeries_1 = this.sortList(sortBaselineSeries_1, topN);
-      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries_1);
+      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries_1, indvAnOutField);
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       var jobs = data.facets.correlation.buckets;
@@ -1245,31 +1267,33 @@ function () {
       var ar = [];
 
       var _loop_1 = function _loop_1(key) {
-        if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
-          var array_1 = result.data.facet_counts.facet_fields[key];
+        if (!result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
+          return "continue";
+        }
 
-          var _loop_2 = function _loop_2(i) {
-            // take every second element
-            if (array_1[i + 1] > 0 && !ar.find(function (ele) {
-              return ele.text === array_1[i];
-            })) {
-              var text = array_1[i];
-              var detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
+        var array = result.data.facet_counts.facet_fields[key];
 
-              if (detectorPatternMatches) {
-                text = '"' + detectorPatternMatches[1] + '"';
-              }
+        var _loop_2 = function _loop_2(i) {
+          // take every second element
+          if (array[i + 1] > 0 && !ar.find(function (ele) {
+            return ele.text === array[i];
+          })) {
+            var text = array[i];
+            var detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
 
-              ar.push({
-                text: text,
-                expandable: false
-              });
+            if (detectorPatternMatches) {
+              text = detectorPatternMatches[1];
             }
-          };
 
-          for (var i = 0; i < array_1.length; i += 2) {
-            _loop_2(i);
+            ar.push({
+              text: '"' + text + '"',
+              expandable: false
+            });
           }
+        };
+
+        for (var i = 0; i < array.length; i += 2) {
+          _loop_2(i);
         }
       };
 
@@ -1344,9 +1368,9 @@ function () {
     return seriesList;
   };
 
-  Utils.getSortedSeries = function (seriesToSort, baselineSeries) {
+  Utils.getSortedSeries = function (seriesToSort, baselineSeries, indvAnOutField) {
     var resultSeries = [];
-    var seriesSuffixes = [' actual', ' expected', ' score', ' anomaly'];
+    var seriesSuffixes = indvAnOutField === 'all' ? [' actual', ' expected', ' score', ' anomaly'] : [' ' + indvAnOutField];
     baselineSeries.forEach(function (baselineSer) {
       var seriesName = baselineSer.target;
       seriesSuffixes.forEach(function (suffix) {
@@ -1521,7 +1545,8 @@ function (_super) {
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
       baseMetric: query.baseMetric,
       groupEnabled: query.groupEnabled || 'false',
-      aggInterval: query.aggInterval || '+1HOUR'
+      aggInterval: query.aggInterval || '+1HOUR',
+      indvAnOutField: query.indvAnOutField || 'all'
     });
     var onChange = _this.props.onChange;
     onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, _this.state));
@@ -1569,7 +1594,8 @@ function (_super) {
         rexOutFields = _a.rexOutFields,
         baseMetric = _a.baseMetric,
         groupEnabled = _a.groupEnabled,
-        aggInterval = _a.aggInterval;
+        aggInterval = _a.aggInterval,
+        indvAnOutField = _a.indvAnOutField;
     var labelWidth = 8;
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
@@ -1610,7 +1636,26 @@ function (_super) {
       value: 'true'
     }, 'true'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
       value: 'false'
-    }, 'false'))), (queryType === 'aggAnomaly' || queryType === 'aggAnomalyByPartFields') && // <div className="gf-form">
+    }, 'false'))), queryType === 'indvAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormLabel"], {
+      width: labelWidth
+    }, "Out Field"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
+      value: indvAnOutField,
+      onChange: function onChange(event) {
+        _this.onFieldValueChange(event, 'indvAnOutField');
+      }
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'all'
+    }, 'All'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'actual'
+    }, 'Actual'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'score'
+    }, 'Score'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'expected'
+    }, 'Expected'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'anomaly'
+    }, 'Anomaly'))), (queryType === 'aggAnomaly' || queryType === 'aggAnomalyByPartFields') && // <div className="gf-form">
     //   <FormLabel width={14}>Aggregation Level</FormLabel>
     //   <select
     //     value={aggInterval}

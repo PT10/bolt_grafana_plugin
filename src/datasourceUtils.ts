@@ -25,6 +25,7 @@ export class Utils {
     correlationMetric: string,
     groupMap: any,
     grouppingEmabled: boolean,
+    indvAnOutField: string,
     topN: number
   ) {
     const data = response.data;
@@ -103,7 +104,7 @@ export class Utils {
         });
       });
       sortBaselineSeries = this.sortList(sortBaselineSeries, topN);
-      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries);
+      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries, indvAnOutField);
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       const jobs = data.facets.correlation.buckets;
@@ -365,26 +366,28 @@ export class Utils {
     if (result.data && result.data.facet_counts) {
       const ar: any[] = [];
       for (const key in result.data.facet_counts.facet_fields) {
-        if (result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
-          const array = result.data.facet_counts.facet_fields[key];
-          for (let i = 0; i < array.length; i += 2) {
-            // take every second element
-            if (
-              array[i + 1] > 0 &&
-              !ar.find(ele => {
-                return ele.text === array[i];
-              })
-            ) {
-              let text = array[i];
-              const detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
-              if (detectorPatternMatches) {
-                text = '"' + detectorPatternMatches[1] + '"';
-              }
-              ar.push({
-                text: text,
-                expandable: false,
-              });
+        if (!result.data.facet_counts.facet_fields.hasOwnProperty(key)) {
+          continue;
+        }
+
+        const array = result.data.facet_counts.facet_fields[key];
+        for (let i = 0; i < array.length; i += 2) {
+          // take every second element
+          if (
+            array[i + 1] > 0 &&
+            !ar.find(ele => {
+              return ele.text === array[i];
+            })
+          ) {
+            let text = array[i];
+            const detectorPatternMatches = text.match(/\( Function: .* Field: (.*) \)/);
+            if (detectorPatternMatches) {
+              text = detectorPatternMatches[1];
             }
+            ar.push({
+              text: '"' + text + '"',
+              expandable: false,
+            });
           }
         }
       }
@@ -457,9 +460,9 @@ export class Utils {
     return seriesList;
   }
 
-  static getSortedSeries(seriesToSort: any[], baselineSeries: any[]): any[] {
+  static getSortedSeries(seriesToSort: any[], baselineSeries: any[], indvAnOutField: string): any[] {
     const resultSeries: any[] = [];
-    const seriesSuffixes = [' actual', ' expected', ' score', ' anomaly'];
+    const seriesSuffixes = indvAnOutField === 'all' ? [' actual', ' expected', ' score', ' anomaly'] : [' ' + indvAnOutField];
     baselineSeries.forEach(baselineSer => {
       const seriesName = baselineSer.target;
       seriesSuffixes.forEach(suffix => {
