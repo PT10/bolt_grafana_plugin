@@ -384,6 +384,13 @@ export class Utils {
             if (detectorPatternMatches) {
               text = detectorPatternMatches[1];
             }
+
+            if (text) {
+              text = text
+                .replace(/\"/g, '\\"')
+                .replace(/{/g, '\\{')
+                .replace(/}/g, '\\}');
+            }
             ar.push({
               text: '"' + text + '"',
               expandable: false,
@@ -509,8 +516,8 @@ export class Utils {
 
   static queryBuilder(query: string) {
     return query
-      .replace(/{/g, '(')
-      .replace(/}/g, ')')
-      .replace(/,/g, ' OR ');
+      .replace(/(?<!(?:\\)){/g, '(') // Replace { not followed by \ with (
+      .replace(/(?<!(?:\\))}/g, ')') // Replace } not followed by \ with )
+      .replace(/\",\"/g, '" OR "');
   }
 }

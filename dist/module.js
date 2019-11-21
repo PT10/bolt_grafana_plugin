@@ -1285,6 +1285,10 @@ function () {
               text = detectorPatternMatches[1];
             }
 
+            if (text) {
+              text = text.replace(/\"/g, '\\"').replace(/{/g, '\\{').replace(/}/g, '\\}');
+            }
+
             ar.push({
               text: '"' + text + '"',
               expandable: false
@@ -1413,7 +1417,9 @@ function () {
   };
 
   Utils.queryBuilder = function (query) {
-    return query.replace(/{/g, '(').replace(/}/g, ')').replace(/,/g, ' OR ');
+    return query.replace(/(?<!(?:\\)){/g, '(') // First occurance
+    .replace(/(?<!(?:\\))}/g, ')') // Last occurance
+    .replace(/\",\"/g, '" OR "');
   };
 
   return Utils;
