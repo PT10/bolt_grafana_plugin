@@ -32,6 +32,11 @@ func (ds *BoltDatasource) Query(ctx context.Context, tsdbReq *datasource.Datasou
 func (ds *BoltDatasource) SearchQuery(ctx context.Context, tsdbReq *datasource.DatasourceRequest) (*datasource.DatasourceResponse, error) {
 	var resultSeries map[string]datasource.TimeSeries = make(map[string]datasource.TimeSeries)
 
+	jobIdMappings, err := ds.getMappings(ctx, tsdbReq)
+	if err != nil {
+		return nil, err
+	}
+
 	var cursorMark string = "*"
 	var nextCursorMark string
 	done := false
@@ -46,7 +51,7 @@ func (ds *BoltDatasource) SearchQuery(ctx context.Context, tsdbReq *datasource.D
 			return nil, err
 		}
 
-		nextCursorMark, err = ds.ParseSearchResponse(body, resultSeries, outFields, qType, cursorMark)
+		nextCursorMark, err = ds.ParseSearchResponse(body, resultSeries, outFields, qType, cursorMark, jobIdMappings)
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +64,6 @@ func (ds *BoltDatasource) SearchQuery(ctx context.Context, tsdbReq *datasource.D
 	}
 
 	values := make([]*datasource.TimeSeries, 0, len(resultSeries))
-
 	for _, v := range resultSeries {
 		var val = v
 		values = append(values, &val)
@@ -87,6 +91,7 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 	ds.logger.Debug("Times", "to Time", toTime, "fromTime", fromTime)
 
 	outFields := strings.Split(modelJson.Get("fl").MustString(), ",")
+
 	processedoutFields := make([]string, len(outFields))
 	for i, v := range outFields {
 		if strings.Contains(v, ":") {
@@ -99,7 +104,7 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 
 	collection := modelJson.Get("collection").MustString("bolt_an")
 	query := modelJson.Get("query").MustString()
-	fl := "timestamp," + modelJson.Get("fl").MustString()
+	fl := "timestamp,jobId," + modelJson.Get("fl").MustString()
 	rbody := modelJson.Get("data")
 	//refId := modelJson.Get("refId")
 	qType := modelJson.Get("queryType").MustString("chart")
@@ -145,30 +150,68 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 	}, outFields, qType, nil
 }
 
-func (ds *BoltDatasource) ParseSearchResponse(body []byte, resultSeries map[string]datasource.TimeSeries, fields []string, qType string, cursor string) (string, error) { //(*datasource.DatasourceResponse, error) {
+func (ds *BoltDatasource) ParseSearchResponse(body []byte, resultSeries map[string]datasource.TimeSeries, fields []string, qType string, cursor string, mappings map[string]map[string]string) (string, error) { //(*datasource.DatasourceResponse, error) {
 	var nextCursorMark string
 	var err error
 	if qType != "indvAnomaly" {
-		for _, v := range fields {
-			if resultSeries[v].Name == "" {
-				resultSeries[v] = datasource.TimeSeries{
-					Name:   v,
-					Points: make([]*datasource.Point, 0),
-				}
-			}
-		}
-		nextCursorMark, err = ds.ParseChartResponse(body, resultSeries, fields, cursor)
+		nextCursorMark, err = ds.ParseChartResponse(body, resultSeries, fields, cursor, mappings)
 		if err != nil {
 			return nextCursorMark, err
 		}
 		ds.logger.Debug("ParseSearchResponse", "Next cursor mark", nextCursorMark)
 	} else {
 		nextCursorMark = cursor
-		err = ds.ParseIndvAnomalyFacetResponse(body, resultSeries, fields)
+		err = ds.ParseIndvAnomalyFacetResponse(body, resultSeries, fields, mappings)
 		if err != nil {
 			return cursor, err
 		}
 	}
 
 	return nextCursorMark, nil
+}
+
+/*
+* Returns mapping for jobId with dashboard and panel. Format: results[jobId]["dashboard"] = <dsName> or
+* results[jobId]["panel"] = <panelName>
+ */
+func (ds *BoltDatasource) getMappings(ctx context.Context, tsdbReq *datasource.DatasourceRequest) (map[string]map[string]string, error) {
+	collection := "bolt_job_config"
+	query := "jobId:*" // "jobId: (" + strings.Join(jobIds, " OR ") + ")"
+	fl := "jobId,searchGroup,name"
+
+	urlStr := tsdbReq.Datasource.Url + "/solr/" + collection + "/select"
+
+	var Url *url.URL
+	var err error
+	Url, err = url.Parse(urlStr)
+
+	parameters := url.Values{}
+	parameters.Add("wt", "json")
+	parameters.Add("q", query)
+	parameters.Add("fl", fl)
+	parameters.Add("limit", "1000")
+
+	Url.RawQuery = parameters.Encode()
+
+	ds.logger.Debug("Bolt Mapping Query", "URL", Url.String())
+
+	req, err := http.NewRequest(http.MethodPost, Url.String(), strings.NewReader(""))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+
+	dsRequestObj := RemoteDatasourceRequest{
+		queryType: "search",
+		req:       req,
+		queries:   tsdbReq.Queries,
+	}
+
+	body, err := ds.MakeHttpRequest(ctx, &dsRequestObj)
+	if err != nil {
+		return nil, err
+	}
+
+	return ds.parseJobIdMappings(body)
 }

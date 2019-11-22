@@ -1417,7 +1417,8 @@ function () {
   };
 
   Utils.queryBuilder = function (query) {
-    return query.replace(/{/g, '(') // (?<!(?:\\)){ Replace { not followed by \ with (. Reverting this part as negetive lookbehind pattern doesn't work in Safari and Solr treats { and ( same.
+    return query.replace(/{/g, '(') // (?<!(?:\\)){ Replace { not followed by \ with (. Reverting this part as negative lookbehind
+    //pattern doesn't work in Safari  and Solr treats { and ( same.
     .replace(/}/g, ')') // Replace } not followed by \ with )
     .replace(/\",\"/g, '" OR "');
   };

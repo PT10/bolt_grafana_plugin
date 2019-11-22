@@ -515,9 +515,12 @@ export class Utils {
   }
 
   static queryBuilder(query: string) {
-    return query
-      .replace(/{/g, '(') // (?<!(?:\\)){ Replace { not followed by \ with (. Reverting this part as negative lookbehind pattern doesn't work in Safari and Solr treats { and ( same.
-      .replace(/}/g, ')') // Replace } not followed by \ with )
-      .replace(/\",\"/g, '" OR "');
+    return (
+      query
+        .replace(/{/g, '(') // (?<!(?:\\)){ Replace { not followed by \ with (. Reverting this part as negative lookbehind
+        //pattern doesn't work in Safari  and Solr treats { and ( same.
+        .replace(/}/g, ')') // Replace } not followed by \ with )
+        .replace(/\",\"/g, '" OR "')
+    );
   }
 }
