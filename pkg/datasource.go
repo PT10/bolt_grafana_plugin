@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,8 +19,8 @@ type BoltDatasource struct {
 	logger hclog.Logger
 }
 
-const indvAnomalyFacet = `{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":20,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,
-"offset":0,"limit":20,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",
+const indvAnomalyFacet = `{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__LIMIT__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,
+"offset":0,"limit":__LIMIT__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",
 "timestamp":{"type":"terms","limit":-1,"field":"timestamp","facet":{"actual":{"type":"terms","field":"actual_value"},
 "score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},
 "expected":{"type":"terms","field":"expected_value"}}}}}}}}`
@@ -102,7 +104,9 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 	}
 	outFields = processedoutFields
 
-	collection := modelJson.Get("collection").MustString("bolt_an")
+	defaultAnCollection, _ := ds.getFieldFromDs(tsdbReq.Datasource.JsonData, "anCollection")
+	collection := modelJson.Get("collection").MustString(defaultAnCollection)
+
 	query := modelJson.Get("query").MustString()
 	fl := "timestamp,jobId," + modelJson.Get("fl").MustString()
 	rbody := modelJson.Get("data")
@@ -120,9 +124,13 @@ func (ds *BoltDatasource) CreateSearchRequest(tsdbReq *datasource.DatasourceRequ
 	parameters.Add("fq", "timestamp:["+fromTime+" TO "+toTime+"]")
 
 	if qType == "indvAnomaly" {
+		facetStr := indvAnomalyFacet
+		limit, _ := ds.getFieldFromDs(tsdbReq.Datasource.JsonData, "topN")
+		facetStr = strings.ReplaceAll(facetStr, "__LIMIT__", limit)
+
 		outFields = []string{modelJson.Get("indvAnOutField").MustString("all")}
 		parameters.Add("facet", "true")
-		parameters.Add("json.facet", indvAnomalyFacet)
+		parameters.Add("json.facet", facetStr)
 	} else if qType == "chart" {
 		parameters.Add("fl", fl)
 		parameters.Add("rows", "1000")
@@ -175,7 +183,7 @@ func (ds *BoltDatasource) ParseSearchResponse(body []byte, resultSeries map[stri
 * results[jobId]["panel"] = <panelName>
  */
 func (ds *BoltDatasource) getMappings(ctx context.Context, tsdbReq *datasource.DatasourceRequest) (map[string]map[string]string, error) {
-	collection := "bolt_job_config"
+	collection, _ := ds.getFieldFromDs(tsdbReq.Datasource.JsonData, "jobConfigCollection")
 	query := "jobId:*" // "jobId: (" + strings.Join(jobIds, " OR ") + ")"
 	fl := "jobId,searchGroup,name"
 
@@ -214,4 +222,14 @@ func (ds *BoltDatasource) getMappings(ctx context.Context, tsdbReq *datasource.D
 	}
 
 	return ds.parseJobIdMappings(body)
+}
+
+func (ds *BoltDatasource) getFieldFromDs(jsonData string, field string) (string, error) {
+	var v interface{}
+	json.Unmarshal([]byte(jsonData), &v)
+	dsInfo := v.(map[string]interface{})
+
+	val := dsInfo[field]
+	valStr := fmt.Sprintf("%v", val)
+	return valStr, nil
 }
