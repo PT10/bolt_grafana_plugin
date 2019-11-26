@@ -30,7 +30,14 @@ func (ds *BoltDatasource) ParseChartResponse(body []byte, resultSeries map[strin
 		}
 
 		var jobId string = doc.Get("jobId").MustString("")
-		jobId = "Dashboard: " + mappings[jobId]["dashboard"] + ", Panel: " + mappings[jobId]["panel"]
+		var searchGroup string = "Search Group"
+		var displayName string = "Display Name"
+
+		if mappings[jobId]["sourceType"] == "GRAFANA" {
+			searchGroup = "Dashboard"
+			displayName = "Panel"
+		}
+		jobId = searchGroup + ": " + mappings[jobId]["dashboard"] + ", " + displayName + ": " + mappings[jobId]["panel"]
 
 		for _, v := range fields {
 			ts := doc.Get("timestamp").MustString()
@@ -82,7 +89,15 @@ func (ds *BoltDatasource) ParseIndvAnomalyFacetResponse(body []byte, resultSerie
 		}
 
 		jobId := bucket.Get("val").MustString("")
-		jobId = "Dashboard: " + jobIdMappings[jobId]["dashboard"] + ", Panel: " + jobIdMappings[jobId]["panel"]
+		var searchGroup string = "Search Group"
+		var displayName string = "Display Name"
+
+		if jobIdMappings[jobId]["sourceType"] == "GRAFANA" {
+			searchGroup = "Dashboard"
+			displayName = "Panel"
+		}
+		jobId = searchGroup + ": " + jobIdMappings[jobId]["dashboard"] + ", " + displayName + ": " + jobIdMappings[jobId]["panel"]
+
 		aggrFieldsBuckets := bucket.Get("group").Get("buckets").MustArray()
 		for _, aggrFieldsBucket := range aggrFieldsBuckets {
 			k, err := json.Marshal(aggrFieldsBucket)
@@ -97,7 +112,9 @@ func (ds *BoltDatasource) ParseIndvAnomalyFacetResponse(body []byte, resultSerie
 
 			aggr_field := aggrFieldsBucketObj.Get("val").MustString()
 
-			seriesName := jobId + ", Timeseries: " + aggr_field
+			aggr_field = ds.getTsField(aggr_field)
+
+			seriesName := jobId + ", " + aggr_field
 			resultSeries[seriesName] = datasource.TimeSeries{
 				Name:   seriesName,
 				Points: make([]*datasource.Point, 0),
@@ -176,12 +193,38 @@ func (ds *BoltDatasource) parseJobIdMappings(body []byte) (map[string]map[string
 		}
 
 		panel := doc.Get("name").MustString()
+		sourcetype := doc.Get("type").MustString()
 
 		results[jobId] = make(map[string]string)
 
 		results[jobId]["dashboard"] = dashboard
 		results[jobId]["panel"] = panel
+		results[jobId]["sourceType"] = sourcetype
 	}
 
 	return results, nil
+}
+
+func (ds *BoltDatasource) getFieldFromDs(jsonData string, field string) (string, error) {
+	var v interface{}
+	json.Unmarshal([]byte(jsonData), &v)
+	dsInfo := v.(map[string]interface{})
+
+	val := dsInfo[field]
+	valStr := fmt.Sprintf("%v", val)
+	return valStr, nil
+}
+
+func (ds *BoltDatasource) getTsField(jsonData string) string {
+	var v interface{}
+	json.Unmarshal([]byte(jsonData), &v)
+	dsInfo := v.(map[string]interface{})
+
+	var result string = ""
+	for k, val := range dsInfo {
+		if k != "aggr_field" {
+			result = k + ": " + fmt.Sprintf("%v", val)
+		}
+	}
+	return result
 }

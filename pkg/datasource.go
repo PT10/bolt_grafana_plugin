@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -179,13 +177,13 @@ func (ds *BoltDatasource) ParseSearchResponse(body []byte, resultSeries map[stri
 }
 
 /*
-* Returns mapping for jobId with dashboard and panel. Format: results[jobId]["dashboard"] = <dsName> or
-* results[jobId]["panel"] = <panelName>
+* Returns mapping for jobId with dashboard, panel and source type. Format: results[jobId]["dashboard"] = <dsName> or
+* results[jobId]["panel"] = <panelName> results[jobId]["sourceType"] = GRAFANA
  */
 func (ds *BoltDatasource) getMappings(ctx context.Context, tsdbReq *datasource.DatasourceRequest) (map[string]map[string]string, error) {
 	collection, _ := ds.getFieldFromDs(tsdbReq.Datasource.JsonData, "jobConfigCollection")
 	query := "jobId:*" // "jobId: (" + strings.Join(jobIds, " OR ") + ")"
-	fl := "jobId,searchGroup,name"
+	fl := "jobId,searchGroup,name,type"
 
 	urlStr := tsdbReq.Datasource.Url + "/solr/" + collection + "/select"
 
@@ -197,7 +195,7 @@ func (ds *BoltDatasource) getMappings(ctx context.Context, tsdbReq *datasource.D
 	parameters.Add("wt", "json")
 	parameters.Add("q", query)
 	parameters.Add("fl", fl)
-	parameters.Add("limit", "1000")
+	parameters.Add("rows", "1000")
 
 	Url.RawQuery = parameters.Encode()
 
@@ -222,14 +220,4 @@ func (ds *BoltDatasource) getMappings(ctx context.Context, tsdbReq *datasource.D
 	}
 
 	return ds.parseJobIdMappings(body)
-}
-
-func (ds *BoltDatasource) getFieldFromDs(jsonData string, field string) (string, error) {
-	var v interface{}
-	json.Unmarshal([]byte(jsonData), &v)
-	dsInfo := v.(map[string]interface{})
-
-	val := dsInfo[field]
-	valStr := fmt.Sprintf("%v", val)
-	return valStr, nil
 }
