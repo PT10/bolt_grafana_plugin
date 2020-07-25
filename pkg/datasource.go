@@ -32,6 +32,8 @@ func (ds *BoltDatasource) Query(ctx context.Context, tsdbReq *datasource.Datasou
 func (ds *BoltDatasource) SearchQuery(ctx context.Context, tsdbReq *datasource.DatasourceRequest) (*datasource.DatasourceResponse, error) {
 	var resultSeries map[string]datasource.TimeSeries = make(map[string]datasource.TimeSeries)
 
+	ds.logger.Debug("Json", "Data", tsdbReq.Datasource.GetDecryptedSecureJsonData())
+
 	jobIdMappings, err := ds.getMappings(ctx, tsdbReq)
 	if err != nil {
 		return nil, err
@@ -46,7 +48,7 @@ func (ds *BoltDatasource) SearchQuery(ctx context.Context, tsdbReq *datasource.D
 			return nil, err
 		}
 
-		body, err := ds.MakeHttpRequest(ctx, remoteDsReq)
+		body, err := ds.MakeHttpRequest(ctx, remoteDsReq, tsdbReq)
 		if err != nil {
 			return nil, err
 		}
@@ -214,7 +216,7 @@ func (ds *BoltDatasource) getMappings(ctx context.Context, tsdbReq *datasource.D
 		queries:   tsdbReq.Queries,
 	}
 
-	body, err := ds.MakeHttpRequest(ctx, &dsRequestObj)
+	body, err := ds.MakeHttpRequest(ctx, &dsRequestObj, tsdbReq)
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/grafana/grafana-plugin-model/go/datasource"
+
+	b64 "encoding/base64"
 	"golang.org/x/net/context"
 	"golang.org/x/net/context/ctxhttp"
 )
@@ -31,7 +34,14 @@ var httpClient = &http.Client{
 	Timeout: time.Duration(time.Second * 30),
 }
 
-func (ds *BoltDatasource) MakeHttpRequest(ctx context.Context, remoteDsReq *RemoteDatasourceRequest) ([]byte, error) {
+func (ds *BoltDatasource) MakeHttpRequest(ctx context.Context, remoteDsReq *RemoteDatasourceRequest, tsdbReq *datasource.DatasourceRequest) ([]byte, error) {
+	secureData := tsdbReq.Datasource.DecryptedSecureJsonData
+	passwd := secureData["basicAuthPassword"]
+	user := "bolt"
+	authToken := b64.StdEncoding.EncodeToString([]byte(user + ":" + passwd))
+
+	remoteDsReq.req.Header.Add("Authorization", "Basic "+authToken)
+
 	res, err := ctxhttp.Do(ctx, httpClient, remoteDsReq.req)
 	if err != nil {
 		return nil, err
