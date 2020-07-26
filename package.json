@@ -6,18 +6,16 @@
     "build": "grafana-toolkit plugin:build",
     "test": "grafana-toolkit plugin:test",
     "dev": "grafana-toolkit plugin:dev",
-    "watch": "grafana-toolkit plugin:dev --watch",
-    "build:dev": "dotenv -e .env.development react-scripts build"
+    "watch": "grafana-toolkit plugin:dev --watch"
   },
   "author": "Grafana Labs",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@grafana/data": "latest",
-    "@grafana/runtime": "latest",
+    "@grafana/data": "^7.0.1",
+    "@grafana/runtime": "^7.0.1",
     "@grafana/toolkit": "next",
-    "@grafana/ui": "^6.3.2",
+    "@grafana/ui": "^7.0.1",
     "@types/lodash": "^4.14.138",
-    "dotenv-cli": "^3.2.0",
     "react": "^16.13.1",
     "react-dom": "latest",
     "react-scripts": "latest"
