@@ -1,4 +1,4 @@
-define(["@grafana/runtime","@grafana/ui","lodash","react"], function(__WEBPACK_EXTERNAL_MODULE__grafana_runtime__, __WEBPACK_EXTERNAL_MODULE__grafana_ui__, __WEBPACK_EXTERNAL_MODULE_lodash__, __WEBPACK_EXTERNAL_MODULE_react__) { return /******/ (function(modules) { // webpackBootstrap
+define(["@grafana/data","@grafana/runtime","@grafana/ui","react"], function(__WEBPACK_EXTERNAL_MODULE__grafana_data__, __WEBPACK_EXTERNAL_MODULE__grafana_runtime__, __WEBPACK_EXTERNAL_MODULE__grafana_ui__, __WEBPACK_EXTERNAL_MODULE_react__) { return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
 /******/
@@ -326,13 +326,11 @@ function __importDefault(mod) {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "BoltDatasource", function() { return BoltDatasource; });
 /* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! tslib */ "../node_modules/tslib/tslib.es6.js");
-/* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @grafana/ui */ "@grafana/ui");
-/* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_grafana_ui__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _grafana_data__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @grafana/data */ "@grafana/data");
+/* harmony import */ var _grafana_data__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_grafana_data__WEBPACK_IMPORTED_MODULE_1__);
 /* harmony import */ var _grafana_runtime__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @grafana/runtime */ "@grafana/runtime");
 /* harmony import */ var _grafana_runtime__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_grafana_runtime__WEBPACK_IMPORTED_MODULE_2__);
 /* harmony import */ var datasourceUtils__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! datasourceUtils */ "./datasourceUtils.ts");
-/* harmony import */ var lodash__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! lodash */ "lodash");
-/* harmony import */ var lodash__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(lodash__WEBPACK_IMPORTED_MODULE_4__);
 function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
 /*
@@ -355,8 +353,7 @@ function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterat
 
 
 
-
-
+ //import _ from 'lodash';
 
 var BoltDatasource =
 /** @class */
@@ -458,7 +455,7 @@ function (_super) {
         }]);
       }
 
-      var collection = lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType) ? _this.anCollection : query.collection;
+      var collection = Object.keys(_this.facets).includes(query.queryType) ? _this.anCollection : query.collection;
 
       if (!query.query) {
         return Promise.resolve([]);
@@ -513,7 +510,7 @@ function (_super) {
         solrQueryParams['facet'] = true;
         solrQueryParams['facet.field'] = 'id';
         solrQueryParams['facet.limit'] = 2;
-      } else if (lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(_this.facets).includes(query.queryType)) {
+      } else if (Object.keys(_this.facets).includes(query.queryType)) {
         var aggInterval = _this.templateSrv.replace(query.aggInterval, options.scopedVars) || '+1HOUR';
         solrQueryParams['facet'] = true;
         solrQueryParams['json.facet'] = _this.facets[query.queryType].replace('__AGG_INTERVAL__', aggInterval).replace('__START_TIME__', startTime).replace('__END_TIME__', endTime).replace(/__TOPN__/g, _this.topN).replace('__SCORE_THRESHOLD__', _this.anomalyThreshold);
@@ -536,7 +533,7 @@ function (_super) {
           'Content-Type': 'application/json;charset=utf-8'
         },
         params: solrQueryParams,
-        data: solrQueryBody
+        data: JSON.stringify(solrQueryBody)
       };
       var cursor = query.queryType === 'chart' ? '*' : null;
       return _this.sendQueryRequest([], httpOpts, query, cursor); // cursor mark or charts
@@ -555,8 +552,7 @@ function (_super) {
           });
         });
       });
-
-      lodash__WEBPACK_IMPORTED_MODULE_4___default.a.keys(series).forEach(function (key) {
+      Object.keys(series).forEach(function (key) {
         resultSeries.push({
           target: key,
           datapoints: series[key].sort(function (a, b) {
@@ -564,7 +560,6 @@ function (_super) {
           })
         });
       });
-
       var result = {
         data: resultSeries
       };
@@ -876,7 +871,7 @@ function (_super) {
   };
 
   return BoltDatasource;
-}(_grafana_ui__WEBPACK_IMPORTED_MODULE_1__["DataSourceApi"]);
+}(_grafana_data__WEBPACK_IMPORTED_MODULE_1__["DataSourceApi"]);
 
 
 /* harmony default export */ __webpack_exports__["default"] = (BoltDatasource);
@@ -1417,10 +1412,13 @@ function () {
   };
 
   Utils.queryBuilder = function (query) {
-    return query.replace(/{/g, '(') // (?<!(?:\\)){ Replace { not followed by \ with (. Reverting this part as negative lookbehind
-    //pattern doesn't work in Safari  and Solr treats { and ( same.
+    var q = query.replace(/\\{/g, '^^^').replace(/\\}/g, '@@@');
+    q = q.replace(/{/g, '(') // (?<!(?:\\)){ Replace { not followed by \ with (. Reverting this part as negative lookbehind
+    // //pattern doesn't work in Safari  and Solr treats { and ( same.
     .replace(/}/g, ')') // Replace } not followed by \ with )
     .replace(/\",\"/g, '" OR "');
+    q = q.replace(/\^\^\^/g, '\\{').replace(/@@@/g, '\\}');
+    return q;
   };
 
   return Utils;
@@ -1441,8 +1439,8 @@ function () {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "BoltConfigControl", function() { return BoltConfigControl; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "plugin", function() { return plugin; });
-/* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @grafana/ui */ "@grafana/ui");
-/* harmony import */ var _grafana_ui__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_grafana_ui__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _grafana_data__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @grafana/data */ "@grafana/data");
+/* harmony import */ var _grafana_data__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_grafana_data__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _datasource__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./datasource */ "./datasource.ts");
 /* harmony import */ var _queryEditor__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./queryEditor */ "./queryEditor.tsx");
 /*
@@ -1476,7 +1474,7 @@ function () {
 }();
 
 
-var plugin = new _grafana_ui__WEBPACK_IMPORTED_MODULE_0__["DataSourcePlugin"](_datasource__WEBPACK_IMPORTED_MODULE_1__["BoltDatasource"]).setConfigCtrl(BoltConfigControl).setQueryEditor(_queryEditor__WEBPACK_IMPORTED_MODULE_2__["BoltQueryEditor"]);
+var plugin = new _grafana_data__WEBPACK_IMPORTED_MODULE_0__["DataSourcePlugin"](_datasource__WEBPACK_IMPORTED_MODULE_1__["BoltDatasource"]).setConfigCtrl(BoltConfigControl).setQueryEditor(_queryEditor__WEBPACK_IMPORTED_MODULE_2__["BoltQueryEditor"]);
 
 /***/ }),
 
@@ -1513,8 +1511,11 @@ __webpack_require__.r(__webpack_exports__);
  *
  */
 
+ //import { FormField, QueryEditorProps, FormLabel } from '@grafana/ui';
 
+ //import { FormLabel } from '@grafana/ui/components/FormLabel/FormLabel';
 
+var FormField = _grafana_ui__WEBPACK_IMPORTED_MODULE_2__["LegacyForms"].FormField;
 
 var BoltQueryEditor =
 /** @class */
@@ -1602,15 +1603,13 @@ function (_super) {
         baseMetric = _a.baseMetric,
         groupEnabled = _a.groupEnabled,
         aggInterval = _a.aggInterval,
-        indvAnOutField = _a.indvAnOutField;
-    var labelWidth = 8;
+        indvAnOutField = _a.indvAnOutField; //const labelWidth = { width: '40px' };
+
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormLabel"], {
-      width: labelWidth
-    }, "Type"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["InlineFormLabel"], null, "Type"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
       value: queryType,
       onChange: function onChange(event) {
         _this.onFieldValueChange(event, 'queryType'); // this.resetFields();
@@ -1622,19 +1621,16 @@ function (_super) {
       }, c.displayName);
     }))), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Query",
       type: "text",
       value: query,
-      labelWidth: labelWidth,
       width: 4,
       name: "query",
       onChange: this.onFieldValueChange
     })), queryType === 'aggAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormLabel"], {
-      width: labelWidth
-    }, "Group Results"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["InlineFormLabel"], null, "Group Results"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
       value: groupEnabled,
       onChange: function onChange(event) {
         _this.onFieldValueChange(event, 'groupEnabled');
@@ -1645,9 +1641,7 @@ function (_super) {
       value: 'false'
     }, 'false'))), queryType === 'indvAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormLabel"], {
-      width: labelWidth
-    }, "Out Field"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["InlineFormLabel"], null, "Out Field"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
       value: indvAnOutField,
       onChange: function onChange(event) {
         _this.onFieldValueChange(event, 'indvAnOutField');
@@ -1676,7 +1670,7 @@ function (_super) {
     // </div>
     react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Aggregation Interval",
       type: "text",
       value: aggInterval,
@@ -1686,21 +1680,19 @@ function (_super) {
       onChange: this.onFieldValueChange
     })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Collection",
       type: "text",
       value: collection,
-      labelWidth: labelWidth,
       width: 4,
       name: "collection",
       onChange: this.onFieldValueChange
     })), queryType === 'correlation' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Base Metric",
       type: "text",
       value: baseMetric,
-      labelWidth: labelWidth,
       width: 4,
       name: "baseMetric",
       onChange: this.onFieldValueChange
@@ -1708,37 +1700,34 @@ function (_super) {
       className: "gf-form-inline"
     }, (queryType === 'rawlogs' || queryType === 'slowQueries') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Sort",
       type: "text",
       value: sortField,
-      labelWidth: labelWidth,
       width: 4,
       name: "sortField",
       onChange: this.onFieldValueChange
     })), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Order",
       type: "text",
       value: sortOrder,
-      labelWidth: labelWidth,
       width: 4,
       name: "sortOrder",
       onChange: this.onFieldValueChange
     }))), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Out Fields",
       type: "text",
       value: fl,
-      labelWidth: labelWidth,
       width: 4,
       name: "fl",
       onChange: this.onFieldValueChange
     })), (queryType === 'rawlogs' || queryType === 'slowQueries') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Number of rows",
       labelWidth: 10,
       type: "text",
@@ -1748,11 +1737,10 @@ function (_super) {
       onChange: this.onFieldValueChange
     })), (queryType === 'rawlogs' || queryType === 'slowQueries') && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Start page",
       type: "text",
       value: start,
-      labelWidth: labelWidth,
       width: 4,
       name: "start",
       onChange: this.onFieldValueChange
@@ -1760,21 +1748,19 @@ function (_super) {
       className: "gf-form-inline"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Rex Query",
       type: "text",
       value: rexQuery,
-      labelWidth: labelWidth,
       width: 4,
       name: "rexQuery",
       onChange: this.onFieldValueChange
     })), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
-    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["FormField"], {
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Output Fields",
       type: "text",
       value: rexOutFields,
-      labelWidth: labelWidth,
       width: 4,
       name: "rexOutFields",
       onChange: this.onFieldValueChange
@@ -1785,6 +1771,17 @@ function (_super) {
 }(react__WEBPACK_IMPORTED_MODULE_1__["PureComponent"]);
 
 
+
+/***/ }),
+
+/***/ "@grafana/data":
+/*!********************************!*\
+  !*** external "@grafana/data" ***!
+  \********************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+module.exports = __WEBPACK_EXTERNAL_MODULE__grafana_data__;
 
 /***/ }),
 
@@ -1807,17 +1804,6 @@ module.exports = __WEBPACK_EXTERNAL_MODULE__grafana_runtime__;
 /***/ (function(module, exports) {
 
 module.exports = __WEBPACK_EXTERNAL_MODULE__grafana_ui__;
-
-/***/ }),
-
-/***/ "lodash":
-/*!*************************!*\
-  !*** external "lodash" ***!
-  \*************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-module.exports = __WEBPACK_EXTERNAL_MODULE_lodash__;
 
 /***/ }),
 

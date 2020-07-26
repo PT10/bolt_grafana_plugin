@@ -16,7 +16,7 @@
  *
  */
 
-import { DataQuery, DataSourceJsonData } from '@grafana/ui';
+import { DataQuery, DataSourceJsonData } from '@grafana/data';
 
 export interface BoltQuery extends DataQuery {
   query: string;

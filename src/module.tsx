@@ -16,7 +16,7 @@
  *
  */
 
-import { DataSourcePlugin } from '@grafana/ui';
+import { DataSourcePlugin } from '@grafana/data';
 
 import { BoltDatasource } from './datasource';
 

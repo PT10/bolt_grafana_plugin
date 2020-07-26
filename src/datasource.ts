@@ -16,13 +16,13 @@
  *
  */
 
-import { DataQueryRequest, DataSourceApi, DataSourceInstanceSettings } from '@grafana/ui';
+import { DataQueryRequest, DataSourceApi, DataSourceInstanceSettings } from '@grafana/data';
 import { DataFrame } from '@grafana/data';
 import { BoltQuery, BoltOptions } from './types';
 import { getBackendSrv } from '@grafana/runtime';
 import { Utils } from 'datasourceUtils';
 
-import _ from 'lodash';
+//import _ from 'lodash';
 
 export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   data: DataFrame[] = [];
@@ -145,7 +145,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           ]);
         }
 
-        const collection = _.keys(this.facets).includes(query.queryType) ? this.anCollection : query.collection;
+        const collection = Object.keys(this.facets).includes(query.queryType) ? this.anCollection : query.collection;
         if (!query.query) {
           return Promise.resolve([]);
         }
@@ -200,7 +200,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           solrQueryParams['facet'] = true;
           solrQueryParams['facet.field'] = 'id';
           solrQueryParams['facet.limit'] = 2;
-        } else if (_.keys(this.facets).includes(query.queryType)) {
+        } else if (Object.keys(this.facets).includes(query.queryType)) {
           const aggInterval = this.templateSrv.replace(query.aggInterval, options.scopedVars) || '+1HOUR';
           solrQueryParams['facet'] = true;
           solrQueryParams['json.facet'] = this.facets[query.queryType]
@@ -227,7 +227,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           method: 'POST',
           headers: { 'Content-Type': 'application/json;charset=utf-8' },
           params: solrQueryParams,
-          data: solrQueryBody, // There can be a big query due to long jobIds and hence it is sent in post request body
+          data: JSON.stringify(solrQueryBody), // There can be a big query due to long jobIds and hence it is sent in post request body
         };
 
         const cursor = query.queryType === 'chart' ? '*' : null;
@@ -252,7 +252,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         });
       });
 
-      _.keys(series).forEach(key => {
+      Object.keys(series).forEach((key: any) => {
         resultSeries.push({
           target: key,
           datapoints: series[key].sort((a: any, b: any) => {
