@@ -331,7 +331,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _grafana_runtime__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @grafana/runtime */ "@grafana/runtime");
 /* harmony import */ var _grafana_runtime__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_grafana_runtime__WEBPACK_IMPORTED_MODULE_2__);
 /* harmony import */ var datasourceUtils__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! datasourceUtils */ "./datasourceUtils.ts");
-function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
 /*
  *
@@ -358,7 +358,7 @@ function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterat
 var BoltDatasource =
 /** @class */
 function (_super) {
-  tslib__WEBPACK_IMPORTED_MODULE_0__["__extends"](BoltDatasource, _super);
+  Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__extends"])(BoltDatasource, _super);
 
   function BoltDatasource(instanceSettings, $q, templateSrv) {
     var _this = _super.call(this, instanceSettings) || this;
@@ -527,7 +527,7 @@ function (_super) {
       }
 
       var httpOpts = {
-        url: _this.baseUrl + '/' + collection + '/select?wt=json',
+        url: _this.baseUrl + '/' + collection + '/select',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json;charset=utf-8'
@@ -1382,8 +1382,8 @@ function () {
   };
 
   Utils.getStdDev = function (series) {
-    var min = Math.min.apply(Math, tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"](series));
-    var max = Math.max.apply(Math, tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"](series));
+    var min = Math.min.apply(Math, Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"])(series));
+    var max = Math.max.apply(Math, Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"])(series));
     series = series.map(function (b) {
       return (b - min) / (max - min);
     });
@@ -1513,14 +1513,13 @@ __webpack_require__.r(__webpack_exports__);
 
  //import { FormField, QueryEditorProps, FormLabel } from '@grafana/ui';
 
- //import { FormLabel } from '@grafana/ui/components/FormLabel/FormLabel';
 
 var FormField = _grafana_ui__WEBPACK_IMPORTED_MODULE_2__["LegacyForms"].FormField;
 
 var BoltQueryEditor =
 /** @class */
 function (_super) {
-  tslib__WEBPACK_IMPORTED_MODULE_0__["__extends"](BoltQueryEditor, _super);
+  Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__extends"])(BoltQueryEditor, _super);
 
   function BoltQueryEditor(props) {
     var _this = _super.call(this, props) || this;
@@ -1531,15 +1530,15 @@ function (_super) {
       var name = _name ? _name : event.target.name;
       var value = event.target.value;
 
-      _this.setState(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.state, (_a = {}, _a[name] = value, _a)));
+      _this.setState(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])({}, _this.state), (_a = {}, _a[name] = value, _a)));
 
       var onChange = _this.props.onChange;
-      onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, (_b = {}, _b[name] = value, _b)));
+      onChange(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])({}, _this.props.query), (_b = {}, _b[name] = value, _b)));
     };
 
     var query = _this.props.query;
     _this.query = query;
-    _this.state = tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.state, {
+    _this.state = Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])({}, _this.state), {
       query: query.query,
       collection: query.collection,
       fl: query.fl,
@@ -1557,7 +1556,7 @@ function (_super) {
       indvAnOutField: query.indvAnOutField || 'all'
     });
     var onChange = _this.props.onChange;
-    onChange(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"]({}, _this.props.query, _this.state));
+    onChange(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])({}, _this.props.query), _this.state));
     return _this;
   }
 

@@ -148,7 +148,14 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
             </select>
           </div>
           <div className="gf-form">
-            <FormField label="Query" type="text" value={query} width={4} name="query" onChange={this.onFieldValueChange}></FormField>
+            <FormField
+              label="Query"
+              type="text"
+              value={query}
+              width={4}
+              name="query"
+              onChange={this.onFieldValueChange}
+            ></FormField>
           </div>
           {/* Show group by infor for aggregated anomalies */}
           {queryType === 'aggAnomaly' && (
@@ -209,11 +216,21 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
             </div>
           )}
           {/* Show collection name textbox */}
-          {queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && (
-            <div className="gf-form">
-              <FormField label="Collection" type="text" value={collection} width={4} name="collection" onChange={this.onFieldValueChange}></FormField>
-            </div>
-          )}
+          {queryType !== 'aggAnomaly' &&
+            queryType !== 'indvAnomaly' &&
+            queryType !== 'correlation' &&
+            queryType !== 'aggAnomalyByPartFields' && (
+              <div className="gf-form">
+                <FormField
+                  label="Collection"
+                  type="text"
+                  value={collection}
+                  width={4}
+                  name="collection"
+                  onChange={this.onFieldValueChange}
+                ></FormField>
+              </div>
+            )}
           {/* Show base metric for correlation */}
           {queryType === 'correlation' && (
             <div className="gf-form">
@@ -235,16 +252,37 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
             {(queryType === 'rawlogs' || queryType === 'slowQueries') && (
               <div>
                 <div className="gf-form">
-                  <FormField label="Sort" type="text" value={sortField} width={4} name="sortField" onChange={this.onFieldValueChange}></FormField>
+                  <FormField
+                    label="Sort"
+                    type="text"
+                    value={sortField}
+                    width={4}
+                    name="sortField"
+                    onChange={this.onFieldValueChange}
+                  ></FormField>
                 </div>
                 <div className="gf-form">
-                  <FormField label="Order" type="text" value={sortOrder} width={4} name="sortOrder" onChange={this.onFieldValueChange}></FormField>
+                  <FormField
+                    label="Order"
+                    type="text"
+                    value={sortOrder}
+                    width={4}
+                    name="sortOrder"
+                    onChange={this.onFieldValueChange}
+                  ></FormField>
                 </div>
               </div>
             )}
 
             <div className="gf-form">
-              <FormField label="Out Fields" type="text" value={fl} width={4} name="fl" onChange={this.onFieldValueChange}></FormField>
+              <FormField
+                label="Out Fields"
+                type="text"
+                value={fl}
+                width={4}
+                name="fl"
+                onChange={this.onFieldValueChange}
+              ></FormField>
             </div>
             {(queryType === 'rawlogs' || queryType === 'slowQueries') && (
               <div className="gf-form">
@@ -261,7 +299,14 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
             )}
             {(queryType === 'rawlogs' || queryType === 'slowQueries') && (
               <div className="gf-form">
-                <FormField label="Start page" type="text" value={start} width={4} name="start" onChange={this.onFieldValueChange}></FormField>
+                <FormField
+                  label="Start page"
+                  type="text"
+                  value={start}
+                  width={4}
+                  name="start"
+                  onChange={this.onFieldValueChange}
+                ></FormField>
               </div>
             )}
           </div>
@@ -269,7 +314,14 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         {queryType === 'slowQueries' && (
           <div className="gf-form-inline">
             <div className="gf-form">
-              <FormField label="Rex Query" type="text" value={rexQuery} width={4} name="rexQuery" onChange={this.onFieldValueChange}></FormField>
+              <FormField
+                label="Rex Query"
+                type="text"
+                value={rexQuery}
+                width={4}
+                name="rexQuery"
+                onChange={this.onFieldValueChange}
+              ></FormField>
             </div>
             <div className="gf-form">
               <FormField

@@ -219,11 +219,13 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           solrQueryParams['sort'] = 'id asc';
         } else if (query.sortField) {
           solrQueryParams['sort'] =
-            this.templateSrv.replace(query.sortField, options.scopedVars) + ' ' + this.templateSrv.replace(query.sortOrder, options.scopedVars);
+            this.templateSrv.replace(query.sortField, options.scopedVars) +
+            ' ' +
+            this.templateSrv.replace(query.sortOrder, options.scopedVars);
         }
 
         const httpOpts = {
-          url: this.baseUrl + '/' + collection + '/select?wt=json',
+          url: this.baseUrl + '/' + collection + '/select',
           method: 'POST',
           headers: { 'Content-Type': 'application/json;charset=utf-8' },
           params: solrQueryParams,
@@ -404,7 +406,8 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       }
     }
 
-    const url = this.baseUrl + '/' + collection + '/select?facet=true&facet.field=' + field + '&wt=json&rows=0&facet.limit=-1';
+    const url =
+      this.baseUrl + '/' + collection + '/select?facet=true&facet.field=' + field + '&wt=json&rows=0&facet.limit=-1';
     const params = {
       url: url,
       method: 'POST',
@@ -427,7 +430,8 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   }
 
   buildValuesMap() {
-    const url = this.baseUrl + '/' + this.jobConfigCollection + '/select?q=jobId:*&fl=jobId,name,searchGroup&rows=10000';
+    const url =
+      this.baseUrl + '/' + this.jobConfigCollection + '/select?q=jobId:*&fl=jobId,name,searchGroup&rows=10000';
     const params = {
       url: url,
       method: 'GET',
@@ -470,7 +474,12 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     const params = {
       q: searchQuery.query,
       rows: 0,
-      fq: 'timestamp:[' + this.templateSrv.timeRange.from.toJSON() + ' TO ' + this.templateSrv.timeRange.to.toJSON() + ']',
+      fq:
+        'timestamp:[' +
+        this.templateSrv.timeRange.from.toJSON() +
+        ' TO ' +
+        this.templateSrv.timeRange.to.toJSON() +
+        ']',
       getRawMessages: true,
       startTime: this.templateSrv.timeRange.from.toJSON(),
       endTime: this.templateSrv.timeRange.to.toJSON(),

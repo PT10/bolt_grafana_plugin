@@ -469,7 +469,8 @@ export class Utils {
 
   static getSortedSeries(seriesToSort: any[], baselineSeries: any[], indvAnOutField: string): any[] {
     const resultSeries: any[] = [];
-    const seriesSuffixes = indvAnOutField === 'all' ? [' actual', ' expected', ' score', ' anomaly'] : [' ' + indvAnOutField];
+    const seriesSuffixes =
+      indvAnOutField === 'all' ? [' actual', ' expected', ' score', ' anomaly'] : [' ' + indvAnOutField];
     baselineSeries.forEach(baselineSer => {
       const seriesName = baselineSer.target;
       seriesSuffixes.forEach(suffix => {
@@ -511,7 +512,10 @@ export class Utils {
         sumY2 += yi * yi;
       };
     x.forEach(reduce);
-    return (minLength * sumXY - sumX * sumY) / Math.sqrt((minLength * sumX2 - sumX * sumX) * (minLength * sumY2 - sumY * sumY));
+    return (
+      (minLength * sumXY - sumX * sumY) /
+      Math.sqrt((minLength * sumX2 - sumX * sumX) * (minLength * sumY2 - sumY * sumY))
+    );
   }
 
   static queryBuilder(query: string) {
