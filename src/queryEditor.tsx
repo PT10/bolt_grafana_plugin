@@ -63,6 +63,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       groupEnabled: query.groupEnabled || 'false',
       aggInterval: query.aggInterval || '+1HOUR',
       indvAnOutField: query.indvAnOutField || 'all',
+      metaBarAggrField: query.metaBarAggrField || 'mean',
     };
 
     const { onChange } = this.props;
@@ -110,6 +111,10 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         displayName: 'Correlation',
         value: 'correlation',
       },
+      {
+        displayName: 'Metadata bar chart',
+        value: 'metaBar',
+      },
     ];
     const {
       query,
@@ -126,6 +131,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       groupEnabled,
       aggInterval,
       indvAnOutField,
+      metaBarAggrField,
     } = this.state;
     //const labelWidth = { width: '40px' };
 
@@ -157,6 +163,22 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               onChange={this.onFieldValueChange}
             ></FormField>
           </div>
+          {queryType === 'metaBar' && (
+            <div className="gf-form">
+              <InlineFormLabel>Aggregation type</InlineFormLabel>
+              <select
+                value={metaBarAggrField}
+                onChange={(event: any) => {
+                  this.onFieldValueChange(event, 'metaBarAggrField');
+                }}
+              >
+                <option value={'min'}>{'min'}</option>
+                <option value={'max'}>{'max'}</option>
+                <option value={'sum'}>{'sum'}</option>
+                <option value={'mean'}>{'mean'}</option>
+              </select>
+            </div>
+          )}
           {/* Show group by infor for aggregated anomalies */}
           {queryType === 'aggAnomaly' && (
             <div className="gf-form">

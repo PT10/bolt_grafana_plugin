@@ -1,3 +1,5 @@
+import { BoltQuery } from 'types';
+
 /*
  *
  *  Copyright (C) 2019 Bolt Analytics Corporation
@@ -19,15 +21,17 @@
 export class Utils {
   static processResponse(
     response: any,
-    format: any,
     timeField: string,
     anomalyThreshold: number,
-    correlationMetric: string,
     groupMap: any,
     grouppingEmabled: boolean,
-    indvAnOutField: string,
-    topN: number
+    topN: number,
+    query: BoltQuery,
+    startTime: string
   ) {
+    const indvAnOutField = query.indvAnOutField;
+    const correlationMetric = query.baseMetric;
+    const format = query.queryType;
     const data = response.data;
     let seriesList: any;
     const series: any = {};
@@ -311,6 +315,26 @@ export class Utils {
           }),
         });
       }
+    } else if (format === 'metaBar') {
+      const field = query.metaBarAggrField || 'mean';
+      const statsData = data.stats;
+      seriesList = [];
+      const pointsMap: any = {};
+      Object.keys(statsData.stats_fields).forEach((key: string) => {
+        const matches = key.match(/hourly_avg_(\d+)_f/);
+        if (matches && matches.length > 1) {
+          const val = statsData.stats_fields[key][field];
+
+          pointsMap[matches[1]] = [val, new Date(startTime)];
+        }
+      });
+
+      Object.keys(pointsMap).forEach(hour => {
+        seriesList.push({
+          target: hour,
+          datapoints: [pointsMap[hour]],
+        });
+      });
     }
 
     if (!seriesList) {

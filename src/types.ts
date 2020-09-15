@@ -34,6 +34,7 @@ export interface BoltQuery extends DataQuery {
   groupEnabled: string;
   aggInterval: string;
   indvAnOutField: string;
+  metaBarAggrField: string;
 }
 
 export interface BoltOptions extends DataSourceJsonData {

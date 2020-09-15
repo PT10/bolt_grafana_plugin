@@ -68,6 +68,16 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}',
   };
 
+  stats: any = {
+    metaBar:
+      'stats=true&stats.field=hourly_avg_0_f&stats.field=hourly_avg_1_f&stats.field=hourly_avg_2_f&stats.field=hourly_avg_3_f&' +
+      'stats.field=hourly_avg_4_f&stats.field=hourly_avg_5_f&stats.field=hourly_avg_6_f&stats.field=hourly_avg_7_f&' +
+      'stats.field=hourly_avg_8_f&stats.field=hourly_avg_9_f&stats.field=hourly_avg_10_f&stats.field=hourly_avg_11_f&' +
+      'stats.field=hourly_avg_12_f&stats.field=hourly_avg_13_f&stats.field=hourly_avg_14_f&stats.field=hourly_avg_15_f&' +
+      'stats.field=hourly_avg_16_f&stats.field=hourly_avg_17_f&stats.field=hourly_avg_18_f&stats.field=hourly_avg_19_f&' +
+      'stats.field=hourly_avg_20_f&stats.field=hourly_avg_21_f&stats.field=hourly_avg_22_f&stats.field=hourly_avg_23_f',
+  };
+
   constructor(instanceSettings: DataSourceInstanceSettings<BoltOptions>, $q: any, templateSrv: any) {
     super(instanceSettings);
 
@@ -214,6 +224,18 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           delete solrQueryParams['json.facet'];
         }
 
+        let statsQueryString = '';
+        if (query.queryType === 'metaBar') {
+          statsQueryString += 'q=' + q + '&rows=0&fq=' + solrQueryParams['fq'] + '&stats=true&';
+          [...Array(24).keys()].forEach(hour => {
+            if (hour === 23) {
+              statsQueryString += 'stats.field=hourly_avg_' + hour + '_f';
+            } else {
+              statsQueryString += 'stats.field=hourly_avg_' + hour + '_f&';
+            }
+          });
+        }
+
         // for cursor to work. Will sort by ts later
         if (query.queryType === 'chart') {
           solrQueryParams['sort'] = 'id asc';
@@ -225,16 +247,16 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         }
 
         const httpOpts = {
-          url: this.baseUrl + '/' + collection + '/select',
+          url: this.baseUrl + '/' + collection + '/select' + (statsQueryString ? '?' + statsQueryString : ''),
           method: 'POST',
           headers: { 'Content-Type': 'application/json;charset=utf-8' },
-          params: solrQueryParams,
-          data: JSON.stringify(solrQueryBody), // There can be a big query due to long jobIds and hence it is sent in post request body
+          params: statsQueryString ? undefined : solrQueryParams,
+          data: statsQueryString ? undefined : JSON.stringify(solrQueryBody), // There can be a big query due to long jobIds and hence it is sent in post request body
         };
 
         const cursor = query.queryType === 'chart' ? '*' : null;
 
-        return this.sendQueryRequest([], httpOpts, query, cursor); // cursor mark or charts
+        return this.sendQueryRequest([], httpOpts, query, startTime, cursor); // cursor mark or charts
       })
       .values();
 
@@ -302,7 +324,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       });
   }
 
-  sendQueryRequest(respArr: any[], options: any, query: BoltQuery, cursor?: any) {
+  sendQueryRequest(respArr: any[], options: any, query: BoltQuery, startTime: string, cursor?: any) {
     /*params.method = 'POST';
     params.headers = { 'Content-Type': 'application/json' };*/
 
@@ -317,20 +339,19 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
           const processedData = Utils.processResponse(
             response,
-            query.queryType,
             this.timestampField,
             this.anomalyThreshold,
-            query.baseMetric,
             groupMap,
             JSON.parse(query.groupEnabled),
-            query.indvAnOutField,
-            this.topN
+            this.topN,
+            query,
+            startTime
           );
 
           respArr.push(processedData);
 
           if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
-            return this.sendQueryRequest(respArr, options, query, response.data.nextCursorMark);
+            return this.sendQueryRequest(respArr, options, query, startTime, response.data.nextCursorMark);
           } else {
             return respArr;
           }
