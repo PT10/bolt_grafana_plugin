@@ -335,6 +335,41 @@ export class Utils {
           datapoints: [pointsMap[hour]],
         });
       });
+    } else if (format === 'metaCp') {
+      seriesList = [];
+      const columns = [
+        { type: 'string', text: 'Time Range' },
+        { type: 'string', text: 'Mean CPU' },
+      ];
+      const rows: any[] = [];
+      data.response.docs.forEach((doc: any) => {
+        [...Array(1440).keys()].every((ind: number) => {
+          const row = [];
+          const cpStartKey = 'changepoint_start_' + ind + '_dt';
+          const cpEndKey = 'changepoint_end_' + ind + '_dt';
+          const cpValueKey = 'changepoint_mean_' + ind + '_f';
+
+          if (cpStartKey && cpEndKey) {
+            row.push(doc[cpStartKey] + ' - ' + doc[cpEndKey]);
+          } else {
+            return false;
+          }
+
+          if (cpValueKey) {
+            row.push(doc[cpValueKey]);
+          }
+          rows.push(row);
+          return true;
+        });
+      });
+
+      seriesList = [
+        {
+          type: 'table',
+          columns: columns,
+          rows: rows,
+        },
+      ];
     }
 
     if (!seriesList) {

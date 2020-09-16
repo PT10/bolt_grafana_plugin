@@ -380,6 +380,9 @@ function (_super) {
       indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
       correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
+    _this.stats = {
+      metaBar: 'stats=true&stats.field=hourly_avg_0_f&stats.field=hourly_avg_1_f&stats.field=hourly_avg_2_f&stats.field=hourly_avg_3_f&' + 'stats.field=hourly_avg_4_f&stats.field=hourly_avg_5_f&stats.field=hourly_avg_6_f&stats.field=hourly_avg_7_f&' + 'stats.field=hourly_avg_8_f&stats.field=hourly_avg_9_f&stats.field=hourly_avg_10_f&stats.field=hourly_avg_11_f&' + 'stats.field=hourly_avg_12_f&stats.field=hourly_avg_13_f&stats.field=hourly_avg_14_f&stats.field=hourly_avg_15_f&' + 'stats.field=hourly_avg_16_f&stats.field=hourly_avg_17_f&stats.field=hourly_avg_18_f&stats.field=hourly_avg_19_f&' + 'stats.field=hourly_avg_20_f&stats.field=hourly_avg_21_f&stats.field=hourly_avg_22_f&stats.field=hourly_avg_23_f'
+    };
     _this.jobIdMappings = {
       dashboards: {},
       panels: {}
@@ -455,7 +458,7 @@ function (_super) {
         }]);
       }
 
-      var collection = Object.keys(_this.facets).includes(query.queryType) ? _this.anCollection : query.collection;
+      var collection = Object.keys(_this.facets).includes(query.queryType) ? _this.anCollection : ['metaBar', 'metaCp'].includes(query.queryType) ? _this.anCollection : query.collection;
 
       if (!query.query) {
         return Promise.resolve([]);
@@ -487,7 +490,7 @@ function (_super) {
 
       var solrQueryParams = {
         fq: _this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
-        fl: _this.timestampField + (query.fl ? ',' + query.fl : ''),
+        fl: _this.timestampField + (query.fl ? ',' + query.fl : ',*'),
         rows: numRows,
         start: start
       }; // Add fields specific to raw logs and single stat on raw logs
@@ -517,6 +520,20 @@ function (_super) {
       } else {
         delete solrQueryParams['facet'];
         delete solrQueryParams['json.facet'];
+      }
+
+      var statsQueryString = '';
+
+      if (query.queryType === 'metaBar') {
+        statsQueryString += 'q=' + q + '&rows=0&fq=' + solrQueryParams['fq'] + '&stats=true&';
+
+        Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"])(Array(24).keys()).forEach(function (hour) {
+          if (hour === 23) {
+            statsQueryString += 'stats.field=hourly_avg_' + hour + '_f';
+          } else {
+            statsQueryString += 'stats.field=hourly_avg_' + hour + '_f&';
+          }
+        });
       } // for cursor to work. Will sort by ts later
 
 
@@ -527,16 +544,16 @@ function (_super) {
       }
 
       var httpOpts = {
-        url: _this.baseUrl + '/' + collection + '/select',
+        url: _this.baseUrl + '/' + collection + '/select' + (statsQueryString ? '?' + statsQueryString : ''),
         method: 'POST',
         headers: {
           'Content-Type': 'application/json;charset=utf-8'
         },
-        params: solrQueryParams,
-        data: JSON.stringify(solrQueryBody)
+        params: statsQueryString ? undefined : solrQueryParams,
+        data: statsQueryString ? undefined : JSON.stringify(solrQueryBody)
       };
       var cursor = query.queryType === 'chart' ? '*' : null;
-      return _this.sendQueryRequest([], httpOpts, query, cursor); // cursor mark or charts
+      return _this.sendQueryRequest([], httpOpts, query, startTime, cursor); // cursor mark or charts
     }).values();
     var series = {};
     var resultSeries = [];
@@ -595,7 +612,7 @@ function (_super) {
     });
   };
 
-  BoltDatasource.prototype.sendQueryRequest = function (respArr, options, query, cursor) {
+  BoltDatasource.prototype.sendQueryRequest = function (respArr, options, query, startTime, cursor) {
     /*params.method = 'POST';
     params.headers = { 'Content-Type': 'application/json' };*/
     var _this = this;
@@ -607,11 +624,11 @@ function (_super) {
     return this.backendSrv.datasourceRequest(options).then(function (response) {
       if (response.status === 200) {
         var groupMap = _this.jobIdMappings;
-        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, query.queryType, _this.timestampField, _this.anomalyThreshold, query.baseMetric, groupMap, JSON.parse(query.groupEnabled), query.indvAnOutField, _this.topN);
+        var processedData = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].processResponse(response, _this.timestampField, _this.anomalyThreshold, groupMap, JSON.parse(query.groupEnabled), _this.topN, query, startTime);
         respArr.push(processedData);
 
         if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
-          return _this.sendQueryRequest(respArr, options, query, response.data.nextCursorMark);
+          return _this.sendQueryRequest(respArr, options, query, startTime, response.data.nextCursorMark);
         } else {
           return respArr;
         }
@@ -889,6 +906,7 @@ function (_super) {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Utils", function() { return Utils; });
 /* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! tslib */ "../node_modules/tslib/tslib.es6.js");
+
 /*
  *
  *  Copyright (C) 2019 Bolt Analytics Corporation
@@ -907,15 +925,17 @@ __webpack_require__.r(__webpack_exports__);
  *
  */
 
-
 var Utils =
 /** @class */
 function () {
   function Utils() {}
 
-  Utils.processResponse = function (response, format, timeField, anomalyThreshold, correlationMetric, groupMap, grouppingEmabled, indvAnOutField, topN) {
+  Utils.processResponse = function (response, timeField, anomalyThreshold, groupMap, grouppingEmabled, topN, query, startTime) {
     var _this = this;
 
+    var indvAnOutField = query.indvAnOutField;
+    var correlationMetric = query.baseMetric;
+    var format = query.queryType;
     var data = response.data;
     var seriesList;
     var series = {}; // Process line chart facet response
@@ -1206,6 +1226,61 @@ function () {
           })
         });
       }
+    } else if (format === 'metaBar') {
+      var field_1 = query.metaBarAggrField || 'mean';
+      var statsData_1 = data.stats;
+      seriesList = [];
+      var pointsMap_1 = {};
+      Object.keys(statsData_1.stats_fields).forEach(function (key) {
+        var matches = key.match(/hourly_avg_(\d+)_f/);
+
+        if (matches && matches.length > 1) {
+          var val = statsData_1.stats_fields[key][field_1];
+          pointsMap_1[matches[1]] = [val, new Date(startTime)];
+        }
+      });
+      Object.keys(pointsMap_1).forEach(function (hour) {
+        seriesList.push({
+          target: hour,
+          datapoints: [pointsMap_1[hour]]
+        });
+      });
+    } else if (format === 'metaCp') {
+      seriesList = [];
+      var columns = [{
+        type: 'string',
+        text: 'Time Range'
+      }, {
+        type: 'string',
+        text: 'Mean CPU'
+      }];
+      var rows_2 = [];
+      data.response.docs.forEach(function (doc) {
+        Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"])(Array(1440).keys()).every(function (ind) {
+          var row = [];
+          var cpStartKey = 'changepoint_start_' + ind + '_dt';
+          var cpEndKey = 'changepoint_end_' + ind + '_dt';
+          var cpValueKey = 'changepoint_mean_' + ind + '_f';
+
+          if (cpStartKey && cpEndKey) {
+            row.push(doc[cpStartKey] + ' - ' + doc[cpEndKey]);
+          } else {
+            return false;
+          }
+
+          if (cpValueKey) {
+            row.push(doc[cpValueKey]);
+          }
+
+          rows_2.push(row);
+          return true;
+        });
+      });
+      seriesList = [{
+        type: 'table',
+        columns: columns,
+        rows: rows_2
+      }];
     }
 
     if (!seriesList) {
@@ -1553,7 +1628,8 @@ function (_super) {
       baseMetric: query.baseMetric,
       groupEnabled: query.groupEnabled || 'false',
       aggInterval: query.aggInterval || '+1HOUR',
-      indvAnOutField: query.indvAnOutField || 'all'
+      indvAnOutField: query.indvAnOutField || 'all',
+      metaBarAggrField: query.metaBarAggrField || 'mean'
     });
     var onChange = _this.props.onChange;
     onChange(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])(Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__assign"])({}, _this.props.query), _this.state));
@@ -1587,6 +1663,12 @@ function (_super) {
     }, {
       displayName: 'Correlation',
       value: 'correlation'
+    }, {
+      displayName: 'Metadata bar chart',
+      value: 'metaBar'
+    }, {
+      displayName: 'Metadata change points',
+      value: 'metaCp'
     }];
     var _a = this.state,
         query = _a.query,
@@ -1602,7 +1684,8 @@ function (_super) {
         baseMetric = _a.baseMetric,
         groupEnabled = _a.groupEnabled,
         aggInterval = _a.aggInterval,
-        indvAnOutField = _a.indvAnOutField; //const labelWidth = { width: '40px' };
+        indvAnOutField = _a.indvAnOutField,
+        metaBarAggrField = _a.metaBarAggrField; //const labelWidth = { width: '40px' };
 
     return react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", null, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form-inline"
@@ -1627,7 +1710,22 @@ function (_super) {
       width: 4,
       name: "query",
       onChange: this.onFieldValueChange
-    })), queryType === 'aggAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), queryType === 'metaBar' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["InlineFormLabel"], null, "Aggregation type"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
+      value: metaBarAggrField,
+      onChange: function onChange(event) {
+        _this.onFieldValueChange(event, 'metaBarAggrField');
+      }
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'min'
+    }, 'min'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'max'
+    }, 'max'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'sum'
+    }, 'sum'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
+      value: 'mean'
+    }, 'mean'))), queryType === 'aggAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["InlineFormLabel"], null, "Group Results"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
       value: groupEnabled,
@@ -1677,7 +1775,7 @@ function (_super) {
       width: 4,
       name: "aggInterval",
       onChange: this.onFieldValueChange
-    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && queryType !== 'metaBar' && queryType !== 'metaCp' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Collection",

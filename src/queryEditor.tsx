@@ -115,6 +115,10 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
         displayName: 'Metadata bar chart',
         value: 'metaBar',
       },
+      {
+        displayName: 'Metadata change points',
+        value: 'metaCp',
+      },
     ];
     const {
       query,
@@ -241,7 +245,9 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
           {queryType !== 'aggAnomaly' &&
             queryType !== 'indvAnomaly' &&
             queryType !== 'correlation' &&
-            queryType !== 'aggAnomalyByPartFields' && (
+            queryType !== 'aggAnomalyByPartFields' &&
+            queryType !== 'metaBar' &&
+            queryType !== 'metaCp' && (
               <div className="gf-form">
                 <FormField
                   label="Collection"

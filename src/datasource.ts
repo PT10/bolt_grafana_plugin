@@ -155,7 +155,11 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           ]);
         }
 
-        const collection = Object.keys(this.facets).includes(query.queryType) ? this.anCollection : query.collection;
+        const collection = Object.keys(this.facets).includes(query.queryType)
+          ? this.anCollection
+          : ['metaBar', 'metaCp'].includes(query.queryType)
+          ? this.anCollection
+          : query.collection;
         if (!query.query) {
           return Promise.resolve([]);
         }
@@ -186,7 +190,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
         // Add basic query fields
         const solrQueryParams: any = {
           fq: this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
-          fl: this.timestampField + (query.fl ? ',' + query.fl : ''),
+          fl: this.timestampField + (query.fl ? ',' + query.fl : ',*'),
           rows: numRows,
           start: start,
         };
