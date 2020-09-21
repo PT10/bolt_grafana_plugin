@@ -401,7 +401,7 @@ export class Utils {
             timeEnd: endTime.valueOf(),
             isRegion: true,
             text: doc[cpValueKey],
-            title: 'Value - ' + doc[cpValueKey],
+            title: 'Unique sub-sequence<br>mean value - ' + doc[cpValueKey],
             source: {
               name: 'changePoint',
               iconColor: color,
