@@ -315,6 +315,31 @@ function __importDefault(mod) {
 
 /***/ }),
 
+/***/ "./AnnotationQueryEditor.ts":
+/*!**********************************!*\
+  !*** ./AnnotationQueryEditor.ts ***!
+  \**********************************/
+/*! exports provided: AnnotationQueryEditor */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AnnotationQueryEditor", function() { return AnnotationQueryEditor; });
+var AnnotationQueryEditor =
+/** @class */
+function () {
+  function AnnotationQueryEditor() {
+    this.annotation.queryText = this.annotation.queryText || '';
+  }
+
+  AnnotationQueryEditor.templateUrl = 'partials/annotations.editor.html';
+  return AnnotationQueryEditor;
+}();
+
+
+
+/***/ }),
+
 /***/ "./datasource.ts":
 /*!***********************!*\
   !*** ./datasource.ts ***!
@@ -464,7 +489,7 @@ function (_super) {
         return Promise.resolve([]);
       }
 
-      var q = _this.getQueryString(query, options); // Provision for empty series filter
+      var q = _this.getQueryString(_this.templateSrv.replace(query.query, options.scopedVars)); // Provision for empty series filter
 
 
       if (q.match(/AND\s*$/)) {
@@ -584,6 +609,50 @@ function (_super) {
     });
   };
 
+  BoltDatasource.prototype.annotationQuery = function (options) {
+    return Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__awaiter"])(this, void 0, Promise, function () {
+      var jsonQ, expression, type, variables, solrQueryBody, collection, startTime, endTime, numRows, start, solrQueryParams, httpOpts;
+      return Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__generator"])(this, function (_a) {
+        jsonQ = JSON.parse(options.annotation.annotationQuery);
+        expression = jsonQ.query;
+        type = jsonQ.type;
+        variables = options.dashboard.getVariables();
+        variables.forEach(function (v) {
+          var name = v.id;
+          var val = v.current.value;
+          expression = expression.replace('$' + name, val);
+        });
+        solrQueryBody = {
+          query: this.getQueryString(expression)
+        };
+        collection = this.anCollection;
+        startTime = options.dashboard.originalTime.from;
+        endTime = options.dashboard.originalTime.to;
+        numRows = 1000;
+        start = 0;
+        solrQueryParams = {
+          fq: this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
+          fl: type === 'changePoints' ? 'changepoint*' : '*',
+          rows: numRows,
+          start: start,
+          sort: 'id asc'
+        };
+        httpOpts = {
+          url: this.baseUrl + '/' + collection + '/select',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json;charset=utf-8'
+          },
+          params: solrQueryParams,
+          data: JSON.stringify(solrQueryBody)
+        };
+        return [2
+        /*return*/
+        , this.processAnnotationsQuery([], httpOpts, type, '*', options.annotation.iconColor)];
+      });
+    });
+  };
+
   BoltDatasource.prototype.testDatasource = function () {
     var options = {
       url: this.baseUrl + '/' + this.anCollection + '/select?wt=json',
@@ -648,6 +717,31 @@ function (_super) {
     });
   };
 
+  BoltDatasource.prototype.processAnnotationsQuery = function (respArr, options, type, cursor, iconColor) {
+    var _this = this;
+
+    if (cursor) {
+      options.params['cursorMark'] = cursor;
+    }
+
+    return this.backendSrv.datasourceRequest(options).then(function (response) {
+      var data = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].getAnnotations(response.data.response, type, iconColor);
+      respArr.push(data);
+
+      if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
+        return _this.processAnnotationsQuery(respArr, options, type, response.data.nextCursorMark, iconColor);
+      } else {
+        return respArr;
+      }
+    })["catch"](function (error) {
+      return Promise.reject([{
+        status: 'error',
+        message: error.status + ': ' + error.statusText,
+        title: 'Error while executing annotations query'
+      }]);
+    });
+  };
+
   BoltDatasource.prototype.getFields = function (matches) {
     var _this = this;
 
@@ -675,7 +769,7 @@ function (_super) {
           var allValues = variable.options.slice(1).map(function (opt) {
             var fieldName = opt.text;
 
-            if (filterField === 'jobId') {
+            if (filterField === 'jobId' || filterField === 'jobId_s') {
               Object.keys(_this.jobIdMappings.panels).forEach(function (k) {
                 if (_this.jobIdMappings.panels[k] === fieldName) {
                   fieldName = k;
@@ -691,7 +785,7 @@ function (_super) {
         resolvedFilterValues = resolvedFilterValues.map(function (dashboard) {
           var fieldName = dashboard;
 
-          if (filterField === 'jobId') {
+          if (filterField === 'jobId' || filterField === 'jobId_s') {
             Object.keys(_this.jobIdMappings.panels).forEach(function (k) {
               if (_this.jobIdMappings.panels[k] === fieldName) {
                 fieldName = k;
@@ -744,6 +838,10 @@ function (_super) {
           panels: {}
         };
         response.data.response.docs.forEach(function (doc) {
+          if (!doc.searchGroup || !doc.searchGroup[0]) {
+            return;
+          }
+
           _this.jobIdMappings.dashboards[doc.jobId] = '"' + doc.searchGroup[0] + '"';
           _this.jobIdMappings.panels[doc.jobId] = '"' + doc.name + '"';
         });
@@ -804,16 +902,29 @@ function (_super) {
     });
   };
 
-  BoltDatasource.prototype.getQueryString = function (query, options) {
+  BoltDatasource.prototype.getQueryString = function (queryStr) {
     var _this = this;
 
-    var q;
-    var queryStr = this.templateSrv.replace(query.query, options.scopedVars);
+    var q; //const queryStr = this.templateSrv.replace(query, options.scopedVars);
+
     var matches = queryStr.match(/__dashboard__:\s*(.*)/);
+
+    if (!matches) {
+      matches = queryStr.match(/__dashboard_s__:\s*(.*)/);
+    }
+
     var matches2 = queryStr.match(/__panel__:\s*(.*) AND .*/);
 
     if (!matches2) {
-      matches2 = queryStr.match(/__panel__:\s*(.*)/);
+      matches2 = queryStr.match(/__panel_s__:\s*(.*) AND .*/);
+
+      if (!matches2) {
+        matches2 = queryStr.match(/__panel__:\s*(.*)/);
+
+        if (!matches2) {
+          matches2 = queryStr.match(/__panel_s__:\s*(.*)/);
+        }
+      }
     }
 
     if (matches && matches.length === 2) {
@@ -822,6 +933,7 @@ function (_super) {
 
       if (dahsboardName_1 === '*') {
         q = queryStr.replace('__dashboard__', 'jobId');
+        q = q.replace('__dashboard_s__', 'jobId_s');
       } else if (dahsboardName_1.startsWith('{')) {
         // All option
         var jobIdList_1 = [];
@@ -839,6 +951,7 @@ function (_super) {
         });
         var jobIdStr = '(' + jobIdList_1.join(' OR ') + ')';
         q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
+        q = q.replace('__dashboard_s__', 'jobId_s').replace(dahsboardName_1, jobIdStr);
       } else {
         // particular option
         var jobIdList = Object.keys(this.jobIdMappings.dashboards).filter(function (jobId) {
@@ -846,6 +959,7 @@ function (_super) {
         });
         var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
         q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName_1, jobIdStr);
+        q = q.replace('__dashboard_s__', 'jobId_s').replace(dahsboardName_1, jobIdStr);
       }
 
       q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(q);
@@ -855,6 +969,7 @@ function (_super) {
 
       if (panelName_1 === '*') {
         q = queryStr.replace('__panel__', 'jobId');
+        q = queryStr.replace('__panel_s__', 'jobId_s');
       } else if (panelName_1.startsWith('{')) {
         // All option
         var jobIdList_2 = [];
@@ -870,6 +985,7 @@ function (_super) {
         });
         var jobIdStr = '(' + jobIdList_2.join(' OR ') + ')';
         q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
+        q = q.replace('__panel_s__', 'jobId_s').replace(panelName_1, jobIdStr);
       } else {
         // particular option
         var jobIdList = Object.keys(this.jobIdMappings.panels).filter(function (jobId) {
@@ -877,6 +993,7 @@ function (_super) {
         });
         var jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
         q = queryStr.replace('__panel__', 'jobId').replace(panelName_1, jobIdStr);
+        q = q.replace('__panel_s__', 'jobId_s').replace(panelName_1, jobIdStr);
       }
 
       q = datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].queryBuilder(q);
@@ -1252,7 +1369,7 @@ function () {
         text: 'Time Range'
       }, {
         type: 'string',
-        text: 'Mean CPU'
+        text: 'Mean'
       }];
       var rows_2 = [];
       data.response.docs.forEach(function (doc) {
@@ -1262,19 +1379,19 @@ function () {
           var cpEndKey = 'changepoint_end_' + ind + '_dt';
           var cpValueKey = 'changepoint_mean_' + ind + '_f';
 
-          if (cpStartKey && cpEndKey) {
+          if (doc[cpStartKey] && doc[cpEndKey]) {
             row.push(doc[cpStartKey] + ' - ' + doc[cpEndKey]);
-          } else {
-            return false;
           }
 
-          if (cpValueKey) {
+          if (doc[cpValueKey]) {
             row.push(doc[cpValueKey]);
           }
 
           rows_2.push(row);
-          return true;
         });
+      });
+      rows_2 = rows_2.sort(function (r1, r2) {
+        return r1[0] < r2[0] ? -1 : r1[0] > r2[0] ? 1 : 0;
       });
       seriesList = [{
         type: 'table',
@@ -1290,6 +1407,36 @@ function () {
     return {
       data: seriesList
     };
+  };
+
+  Utils.getAnnotations = function (response, type, color) {
+    var events = [];
+    response.docs.forEach(function (doc) {
+      Object(tslib__WEBPACK_IMPORTED_MODULE_0__["__spread"])(Array(1440).keys()).every(function (ind) {
+        var cpStartKey = 'changepoint_start_' + ind + '_dt';
+        var cpEndKey = 'changepoint_end_' + ind + '_dt';
+        var cpValueKey = 'changepoint_mean_' + ind + '_f';
+
+        if (doc[cpStartKey] && doc[cpEndKey] && doc[cpValueKey]) {
+          //row.push(doc[cpStartKey] + ' - ' + doc[cpEndKey]);
+          var stTime = new Date(doc[cpStartKey]);
+          var endTime = new Date(doc[cpEndKey]);
+          var event = {
+            time: stTime.valueOf(),
+            timeEnd: endTime.valueOf(),
+            isRegion: true,
+            text: doc[cpValueKey],
+            title: 'Value - ' + doc[cpValueKey],
+            source: {
+              name: 'changePoint',
+              iconColor: color
+            }
+          };
+          events.push(event);
+        }
+      });
+    });
+    return events;
   };
 
   Utils.getGrouppedResults = function (seriesList, groupMap) {
@@ -1356,7 +1503,7 @@ function () {
             }
 
             if (text) {
-              text = text.replace(/\"/g, '\\"').replace(/{/g, '\\{').replace(/}/g, '\\}');
+              text = text.replace(/\\/g, '\\\\').replace(/\"/g, '\\"').replace(/{/g, '\\{').replace(/}/g, '\\}');
             }
 
             ar.push({
@@ -1518,6 +1665,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _grafana_data__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_grafana_data__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _datasource__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./datasource */ "./datasource.ts");
 /* harmony import */ var _queryEditor__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./queryEditor */ "./queryEditor.tsx");
+/* harmony import */ var _AnnotationQueryEditor__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./AnnotationQueryEditor */ "./AnnotationQueryEditor.ts");
 /*
  *
  *  Copyright (C) 2019 Bolt Analytics Corporation
@@ -1539,6 +1687,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+
 var BoltConfigControl =
 /** @class */
 function () {
@@ -1549,7 +1698,7 @@ function () {
 }();
 
 
-var plugin = new _grafana_data__WEBPACK_IMPORTED_MODULE_0__["DataSourcePlugin"](_datasource__WEBPACK_IMPORTED_MODULE_1__["BoltDatasource"]).setConfigCtrl(BoltConfigControl).setQueryEditor(_queryEditor__WEBPACK_IMPORTED_MODULE_2__["BoltQueryEditor"]);
+var plugin = new _grafana_data__WEBPACK_IMPORTED_MODULE_0__["DataSourcePlugin"](_datasource__WEBPACK_IMPORTED_MODULE_1__["BoltDatasource"]).setConfigCtrl(BoltConfigControl).setQueryEditor(_queryEditor__WEBPACK_IMPORTED_MODULE_2__["BoltQueryEditor"]).setAnnotationQueryCtrl(_AnnotationQueryEditor__WEBPACK_IMPORTED_MODULE_3__["AnnotationQueryEditor"]);
 
 /***/ }),
 

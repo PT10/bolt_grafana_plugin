@@ -22,6 +22,7 @@ import { BoltDatasource } from './datasource';
 
 import { BoltQueryEditor } from './queryEditor';
 import { BoltOptions, BoltQuery } from './types';
+import { AnnotationQueryEditor } from './AnnotationQueryEditor';
 
 export class BoltConfigControl {
   static templateUrl = 'partials/config.html';
@@ -29,4 +30,5 @@ export class BoltConfigControl {
 
 export const plugin = new DataSourcePlugin<BoltDatasource, BoltQuery, BoltOptions>(BoltDatasource)
   .setConfigCtrl(BoltConfigControl)
-  .setQueryEditor(BoltQueryEditor);
+  .setQueryEditor(BoltQueryEditor)
+  .setAnnotationQueryCtrl(AnnotationQueryEditor);

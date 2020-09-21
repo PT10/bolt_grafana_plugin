@@ -1,4 +1,5 @@
 import { BoltQuery } from 'types';
+import { AnnotationEvent } from '@grafana/data';
 
 /*
  *
@@ -339,9 +340,9 @@ export class Utils {
       seriesList = [];
       const columns = [
         { type: 'string', text: 'Time Range' },
-        { type: 'string', text: 'Mean CPU' },
+        { type: 'string', text: 'Mean' },
       ];
-      const rows: any[] = [];
+      let rows: any[] = [];
       data.response.docs.forEach((doc: any) => {
         [...Array(1440).keys()].every((ind: number) => {
           const row = [];
@@ -349,18 +350,19 @@ export class Utils {
           const cpEndKey = 'changepoint_end_' + ind + '_dt';
           const cpValueKey = 'changepoint_mean_' + ind + '_f';
 
-          if (cpStartKey && cpEndKey) {
+          if (doc[cpStartKey] && doc[cpEndKey]) {
             row.push(doc[cpStartKey] + ' - ' + doc[cpEndKey]);
-          } else {
-            return false;
           }
 
-          if (cpValueKey) {
+          if (doc[cpValueKey]) {
             row.push(doc[cpValueKey]);
           }
           rows.push(row);
-          return true;
         });
+      });
+
+      rows = rows.sort((r1, r2) => {
+        return r1[0] < r2[0] ? -1 : r1[0] > r2[0] ? 1 : 0;
       });
 
       seriesList = [
@@ -378,6 +380,40 @@ export class Utils {
     return {
       data: seriesList,
     };
+  }
+
+  static getAnnotations(response: any, type: string, color: string) {
+    const events: AnnotationEvent[] = [];
+
+    response.docs.forEach((doc: any) => {
+      [...Array(1440).keys()].every((ind: number) => {
+        const cpStartKey = 'changepoint_start_' + ind + '_dt';
+        const cpEndKey = 'changepoint_end_' + ind + '_dt';
+        const cpValueKey = 'changepoint_mean_' + ind + '_f';
+
+        if (doc[cpStartKey] && doc[cpEndKey] && doc[cpValueKey]) {
+          //row.push(doc[cpStartKey] + ' - ' + doc[cpEndKey]);
+
+          const stTime = new Date(doc[cpStartKey]);
+          const endTime = new Date(doc[cpEndKey]);
+          const event: AnnotationEvent = {
+            time: stTime.valueOf(),
+            timeEnd: endTime.valueOf(),
+            isRegion: true,
+            text: doc[cpValueKey],
+            title: 'Value - ' + doc[cpValueKey],
+            source: {
+              name: 'changePoint',
+              iconColor: color,
+            },
+          };
+
+          events.push(event);
+        }
+      });
+    });
+
+    return events;
   }
 
   static getGrouppedResults(seriesList: [], groupMap: any) {
@@ -446,6 +482,7 @@ export class Utils {
 
             if (text) {
               text = text
+                .replace(/\\/g, '\\\\')
                 .replace(/\"/g, '\\"')
                 .replace(/{/g, '\\{')
                 .replace(/}/g, '\\}');

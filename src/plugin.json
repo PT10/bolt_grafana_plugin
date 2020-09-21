@@ -5,6 +5,7 @@
   "metrics": true,
   "backend": true,
   "alerting": true,
+  "annotations": true,
   "executable": "boltanalytics-backend-plugin",
 
   "info": {

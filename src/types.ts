@@ -35,6 +35,8 @@ export interface BoltQuery extends DataQuery {
   aggInterval: string;
   indvAnOutField: string;
   metaBarAggrField: string;
+  annotationQuery: string;
+  iconColor: string;
 }
 
 export interface BoltOptions extends DataSourceJsonData {

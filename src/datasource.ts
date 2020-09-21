@@ -16,7 +16,13 @@
  *
  */
 
-import { DataQueryRequest, DataSourceApi, DataSourceInstanceSettings } from '@grafana/data';
+import {
+  DataQueryRequest,
+  DataSourceApi,
+  DataSourceInstanceSettings,
+  AnnotationQueryRequest,
+  AnnotationEvent,
+} from '@grafana/data';
 import { DataFrame } from '@grafana/data';
 import { BoltQuery, BoltOptions } from './types';
 import { getBackendSrv } from '@grafana/runtime';
@@ -164,7 +170,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
           return Promise.resolve([]);
         }
 
-        let q = this.getQueryString(query, options);
+        let q = this.getQueryString(this.templateSrv.replace(query.query, options.scopedVars));
 
         // Provision for empty series filter
         if (q.match(/AND\s*$/)) {
@@ -297,6 +303,44 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     });
   }
 
+  async annotationQuery(options: AnnotationQueryRequest<BoltQuery>): Promise<AnnotationEvent[]> {
+    let jsonQ = JSON.parse(options.annotation.annotationQuery);
+    let expression = jsonQ.query;
+    let type = jsonQ.type;
+
+    const variables = options.dashboard.getVariables();
+    variables.forEach((v: any) => {
+      const name = v.id;
+      const val = v.current.value;
+
+      expression = expression.replace('$' + name, val);
+    });
+
+    const solrQueryBody = { query: this.getQueryString(expression) };
+    const collection = this.anCollection;
+    const startTime = options.dashboard.originalTime.from;
+    const endTime = options.dashboard.originalTime.to;
+    const numRows = 1000;
+    const start = 0;
+    const solrQueryParams: any = {
+      fq: this.timestampField + ':[' + startTime + ' TO ' + endTime + ']',
+      fl: type === 'changePoints' ? 'changepoint*' : '*',
+      rows: numRows,
+      start: start,
+      sort: 'id asc',
+    };
+
+    const httpOpts = {
+      url: this.baseUrl + '/' + collection + '/select',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json;charset=utf-8' },
+      params: solrQueryParams,
+      data: JSON.stringify(solrQueryBody), // There can be a big query due to long jobIds and hence it is sent in post request body
+    };
+
+    return this.processAnnotationsQuery([], httpOpts, type, '*', options.annotation.iconColor);
+  }
+
   testDatasource() {
     const options = {
       url: this.baseUrl + '/' + this.anCollection + '/select?wt=json',
@@ -380,6 +424,34 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       });
   }
 
+  processAnnotationsQuery(respArr: any[], options: any, type: string, cursor: string, iconColor: string) {
+    if (cursor) {
+      options.params['cursorMark'] = cursor;
+    }
+    return this.backendSrv
+      .datasourceRequest(options)
+      .then((response: any) => {
+        const data = Utils.getAnnotations(response.data.response, type, iconColor);
+
+        respArr.push(data);
+
+        if (cursor && response.data.nextCursorMark && cursor !== response.data.nextCursorMark) {
+          return this.processAnnotationsQuery(respArr, options, type, response.data.nextCursorMark, iconColor);
+        } else {
+          return respArr;
+        }
+      })
+      .catch((error: any) => {
+        return Promise.reject([
+          {
+            status: 'error',
+            message: error.status + ': ' + error.statusText,
+            title: 'Error while executing annotations query',
+          },
+        ]);
+      });
+  }
+
   getFields(matches: any) {
     const collection = matches[1];
     const filterField = matches[2];
@@ -403,7 +475,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
             .slice(1)
             .map((opt: any) => {
               let fieldName = opt.text;
-              if (filterField === 'jobId') {
+              if (filterField === 'jobId' || filterField === 'jobId_s') {
                 Object.keys(this.jobIdMappings.panels).forEach((k: string) => {
                   if (this.jobIdMappings.panels[k] === fieldName) {
                     fieldName = k;
@@ -418,7 +490,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       } else {
         resolvedFilterValues = resolvedFilterValues.map(dashboard => {
           let fieldName = dashboard;
-          if (filterField === 'jobId') {
+          if (filterField === 'jobId' || filterField === 'jobId_s') {
             Object.keys(this.jobIdMappings.panels).forEach((k: string) => {
               if (this.jobIdMappings.panels[k] === fieldName) {
                 fieldName = k;
@@ -465,6 +537,9 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       if (response.status === 200) {
         this.jobIdMappings = { dashboards: {}, panels: {} };
         response.data.response.docs.forEach((doc: any) => {
+          if (!doc.searchGroup || !doc.searchGroup[0]) {
+            return;
+          }
           this.jobIdMappings.dashboards[doc.jobId] = '"' + doc.searchGroup[0] + '"';
           this.jobIdMappings.panels[doc.jobId] = '"' + doc.name + '"';
         });
@@ -525,13 +600,24 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     });
   }
 
-  getQueryString(query: BoltQuery, options: DataQueryRequest<BoltQuery>) {
+  getQueryString(queryStr: string) {
     let q: string;
-    const queryStr = this.templateSrv.replace(query.query, options.scopedVars);
-    const matches = queryStr.match(/__dashboard__:\s*(.*)/);
+    //const queryStr = this.templateSrv.replace(query, options.scopedVars);
+
+    let matches = queryStr.match(/__dashboard__:\s*(.*)/);
+    if (!matches) {
+      matches = queryStr.match(/__dashboard_s__:\s*(.*)/);
+    }
+
     let matches2 = queryStr.match(/__panel__:\s*(.*) AND .*/);
     if (!matches2) {
-      matches2 = queryStr.match(/__panel__:\s*(.*)/);
+      matches2 = queryStr.match(/__panel_s__:\s*(.*) AND .*/);
+      if (!matches2) {
+        matches2 = queryStr.match(/__panel__:\s*(.*)/);
+        if (!matches2) {
+          matches2 = queryStr.match(/__panel_s__:\s*(.*)/);
+        }
+      }
     }
 
     if (matches && matches.length === 2) {
@@ -539,6 +625,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       const dahsboardName: string = matches[1];
       if (dahsboardName === '*') {
         q = queryStr.replace('__dashboard__', 'jobId');
+        q = q.replace('__dashboard_s__', 'jobId_s');
       } else if (dahsboardName.startsWith('{')) {
         // All option
         const jobIdList: any[] = [];
@@ -559,6 +646,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
         const jobIdStr = '(' + jobIdList.join(' OR ') + ')';
         q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
+        q = q.replace('__dashboard_s__', 'jobId_s').replace(dahsboardName, jobIdStr);
       } else {
         // particular option
         const jobIdList: string[] = Object.keys(this.jobIdMappings.dashboards).filter((jobId: string) => {
@@ -567,6 +655,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
         const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
         q = queryStr.replace('__dashboard__', 'jobId').replace(dahsboardName, jobIdStr);
+        q = q.replace('__dashboard_s__', 'jobId_s').replace(dahsboardName, jobIdStr);
       }
       q = Utils.queryBuilder(q);
     } else if (matches2 && matches2.length === 2) {
@@ -575,6 +664,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
       if (panelName === '*') {
         q = queryStr.replace('__panel__', 'jobId');
+        q = queryStr.replace('__panel_s__', 'jobId_s');
       } else if (panelName.startsWith('{')) {
         // All option
         const jobIdList: any[] = [];
@@ -595,6 +685,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
         const jobIdStr = '(' + jobIdList.join(' OR ') + ')';
         q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
+        q = q.replace('__panel_s__', 'jobId_s').replace(panelName, jobIdStr);
       } else {
         // particular option
         const jobIdList: string[] = Object.keys(this.jobIdMappings.panels).filter((jobId: string) => {
@@ -603,6 +694,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
 
         const jobIdStr = '( ' + jobIdList.join(' OR ') + ' )';
         q = queryStr.replace('__panel__', 'jobId').replace(panelName, jobIdStr);
+        q = q.replace('__panel_s__', 'jobId_s').replace(panelName, jobIdStr);
       }
       q = Utils.queryBuilder(q);
     } else {
