@@ -354,7 +354,7 @@ export class Utils {
             row.push(doc[cpStartKey] + ' - ' + doc[cpEndKey]);
           }
 
-          if (doc[cpValueKey]) {
+          if (doc[cpValueKey] || doc[cpValueKey] === 0) {
             row.push(doc[cpValueKey]);
           }
           rows.push(row);

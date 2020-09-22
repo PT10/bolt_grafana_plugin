@@ -620,14 +620,14 @@ function (_super) {
         variables.forEach(function (v) {
           var name = v.id;
           var val = v.current.value;
-          expression = expression.replace('$' + name, val);
+          expression = expression.replace('$' + name, val || '*');
         });
         solrQueryBody = {
           query: this.getQueryString(expression)
         };
         collection = this.anCollection;
-        startTime = options.dashboard.originalTime.from;
-        endTime = options.dashboard.originalTime.to;
+        startTime = options.range.from.toISOString();
+        endTime = options.range.to.toISOString();
         numRows = 1000;
         start = 0;
         solrQueryParams = {
@@ -1383,7 +1383,7 @@ function () {
             row.push(doc[cpStartKey] + ' - ' + doc[cpEndKey]);
           }
 
-          if (doc[cpValueKey]) {
+          if (doc[cpValueKey] || doc[cpValueKey] === 0) {
             row.push(doc[cpValueKey]);
           }
 

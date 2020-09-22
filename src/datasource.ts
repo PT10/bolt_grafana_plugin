@@ -313,13 +313,13 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
       const name = v.id;
       const val = v.current.value;
 
-      expression = expression.replace('$' + name, val);
+      expression = expression.replace('$' + name, val || '*');
     });
 
     const solrQueryBody = { query: this.getQueryString(expression) };
     const collection = this.anCollection;
-    const startTime = options.dashboard.originalTime.from;
-    const endTime = options.dashboard.originalTime.to;
+    const startTime = options.range.from.toISOString();
+    const endTime = options.range.to.toISOString();
     const numRows = 1000;
     const start = 0;
     const solrQueryParams: any = {
