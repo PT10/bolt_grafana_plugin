@@ -1160,7 +1160,7 @@ function () {
         });
       });
       sortBaselineSeries_1 = this.sortList(sortBaselineSeries_1, topN);
-      seriesList = prefix_1 ? this.getSortedSeries(seriesList, sortBaselineSeries_1, indvAnOutField) : seriesList;
+      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries_1, indvAnOutField, prefix_1);
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       var jobs = data.facets.correlation.buckets;
@@ -1658,14 +1658,14 @@ function () {
     return seriesList;
   };
 
-  Utils.getSortedSeries = function (seriesToSort, baselineSeries, indvAnOutField) {
+  Utils.getSortedSeries = function (seriesToSort, baselineSeries, indvAnOutField, prefix) {
     var resultSeries = [];
-    var seriesSuffixes = indvAnOutField === 'all' ? [' actual', ' expected', ' score', ' anomaly'] : [' ' + indvAnOutField];
+    var seriesSuffixes = indvAnOutField === 'all' ? ['actual', 'expected', 'score', 'anomaly'] : [indvAnOutField];
     baselineSeries.forEach(function (baselineSer) {
       var seriesName = baselineSer.target;
       seriesSuffixes.forEach(function (suffix) {
         resultSeries.push(seriesToSort.find(function (s) {
-          return s.target === seriesName + suffix;
+          return s.target === (prefix ? seriesName + ' ' + suffix : suffix);
         }));
       });
     });

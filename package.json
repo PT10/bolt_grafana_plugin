@@ -4,8 +4,10 @@
   "description": "Bolt Datasource",
   "scripts": {
     "build": "grafana-toolkit plugin:build",
+    "postbuild": "rm -rf alertlens-solr; mv dist alertlens-solr",
     "test": "grafana-toolkit plugin:test",
     "dev": "grafana-toolkit plugin:dev",
+    "postdev": "rm -rf alertlens-solr; mv dist alertlens-solr",
     "watch": "grafana-toolkit plugin:dev --watch"
   },
   "author": "Grafana Labs",

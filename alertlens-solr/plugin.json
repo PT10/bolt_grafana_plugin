@@ -1,6 +1,6 @@
 {
   "type": "datasource",
-  "name": "Bolt",
+  "name": "AlertLens - solr",
   "id": "boltanalytics-solr-datasource",
   "metrics": true,
   "backend": true,

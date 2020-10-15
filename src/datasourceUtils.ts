@@ -117,7 +117,7 @@ export class Utils {
         });
       });
       sortBaselineSeries = this.sortList(sortBaselineSeries, topN);
-      seriesList = prefix ? this.getSortedSeries(seriesList, sortBaselineSeries, indvAnOutField) : seriesList;
+      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries, indvAnOutField, prefix);
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       const jobs = data.facets.correlation.buckets;
@@ -609,16 +609,15 @@ export class Utils {
     return seriesList;
   }
 
-  static getSortedSeries(seriesToSort: any[], baselineSeries: any[], indvAnOutField: string): any[] {
+  static getSortedSeries(seriesToSort: any[], baselineSeries: any[], indvAnOutField: string, prefix: boolean): any[] {
     const resultSeries: any[] = [];
-    const seriesSuffixes =
-      indvAnOutField === 'all' ? [' actual', ' expected', ' score', ' anomaly'] : [' ' + indvAnOutField];
+    const seriesSuffixes = indvAnOutField === 'all' ? ['actual', 'expected', 'score', 'anomaly'] : [indvAnOutField];
     baselineSeries.forEach(baselineSer => {
       const seriesName = baselineSer.target;
       seriesSuffixes.forEach(suffix => {
         resultSeries.push(
           seriesToSort.find(s => {
-            return s.target === seriesName + suffix;
+            return s.target === (prefix ? seriesName + ' ' + suffix : suffix);
           })
         );
       });
