@@ -53,21 +53,30 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
   facets: any = {
     aggAnomaly:
       '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"sort":"s desc","type":"terms","field":"jobId",' +
+      '"facet":{"s":"max(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__",' +
+      '"end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]"' +
+      ',"facet":{"severity":{"type":"terms","field":"Severity_s","facet":{"score":"max(score_value)"}}}}}}}}}',
+    /*'{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"sort":"s desc","type":"terms","field":"jobId",' +
       '"facet":{"s": "max(score_value)", "Day0":{"type":"range",' +
       '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' +
-      '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
+      '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',*/
     aggAnomalyByPartFields:
-      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit": __TOPN__,"type":"terms","field":"jobId",' +
+      '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"partField":' +
+      '{"type":"terms","field":"partition_fields","limit":__TOPN__,"sort":"s desc","facet":{"s":"max(score_value)","Day0":{' +
+      '"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":' +
+      '{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)","severity":' +
+      '{"type":"terms","field":"Severity_s","facet":{"score":"max(score_value)"}}}}}}}}}}}',
+    /*'{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit": __TOPN__,"type":"terms","field":"jobId",' +
       '"facet":{"partField":{"type":"terms","field":"partition_fields","limit": __TOPN__,"sort":"s desc",' +
       '"facet":{"s":"max(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' +
       '"gap":"__AGG_INTERVAL__",' +
-      '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
+      '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',*/
     indvAnomaly:
       '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
       '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",' +
       '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","facet":{"actual":{"type":"terms","field":"actual_value"}, ' +
       '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' +
-      '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
+      '"expected":{"type":"terms","field":"expected_value"},"severity": {"type": "terms","field": "Severity_s"}}}}}}}}',
     correlation:
       '{"correlation":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' +
       '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' +
@@ -126,15 +135,29 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     }
 
     const pattern1 = /^getPageCount\(\$(.*),\s*\$(.*)\)$/;
-    const pattern2 = /^(.*)\((.*):\s*(.*),\s*(.*)\)$/;
+    //const pattern2 = /^(.*)\((.*):\s*(.*),\s*(.*)\)$/;
+    const pattern2 = /^(.*)\((.*)\)$/;
 
     const matches1: any = query.match(pattern1);
     const matches2: any = query.match(pattern2);
 
     if (matches1 && matches1.length === 3) {
       return this.getTotalCount(matches1);
-    } else if (matches2 && matches2.length === 5) {
-      return this.getFields(matches2);
+    } else if (matches2) {
+      const tokens = matches2[2].split(/,\s*/);
+      const queryParts = tokens[0].split(/:\s*/);
+
+      const tokenArr = [];
+      tokenArr.push(matches2[0]);
+      tokenArr.push(matches2[1]);
+      tokenArr.push(queryParts[0]);
+      tokenArr.push(queryParts[1]);
+      tokenArr.push(tokens[1]);
+
+      const addQuotes = tokens[2] || 'true';
+      tokenArr.push(JSON.parse(addQuotes));
+
+      return this.getFields(tokenArr);
     } else {
       return Promise.reject({
         status: 'error',
@@ -457,6 +480,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     const filterField = matches[2];
     let filterFieldVal = matches[3].replace('$', '');
     const field = matches[4];
+    const addQuotes = matches[5];
 
     const variable = this.templateSrv.variables.find((v: any) => v.name === filterFieldVal);
     if (variable) {
@@ -513,7 +537,7 @@ export class BoltDatasource extends DataSourceApi<BoltQuery, BoltOptions> {
     };
     return this.backendSrv.datasourceRequest(params).then((response: any) => {
       if (response.status === 200) {
-        return Utils.mapToTextValue(response);
+        return Utils.mapToTextValue(response, addQuotes);
       } else {
         return Promise.reject([
           {

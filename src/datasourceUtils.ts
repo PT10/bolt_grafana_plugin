@@ -42,8 +42,13 @@ export class Utils {
       seriesList = [];
       let sortBaselineSeries: any[] = [];
       const jobs = data.facets.lineChartFacet.buckets;
+      let prefix = false;
       jobs.forEach((job: any) => {
         const partFields = job.group.buckets;
+        if (partFields.length > 1) {
+          prefix = true;
+        }
+
         partFields.forEach((partField: any) => {
           const dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
           const panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
@@ -69,11 +74,14 @@ export class Utils {
           buckets.forEach((timeBucket: any) => {
             const d: Date = new Date(timeBucket.val);
             const ts = d.getTime();
+
+            const severity = timeBucket.severity.buckets[0].val;
             const actual = timeBucket.actual.buckets[0].val;
             let score = timeBucket.score.buckets[0].val;
             let anomaly = timeBucket.anomaly.buckets[0].val;
             const expected = timeBucket.expected.buckets[0].val;
-            if (score >= anomalyThreshold && anomaly) {
+
+            if (['Critical', 'Warning'].includes(severity) && score >= anomalyThreshold && anomaly) {
               anomaly = actual;
             } else {
               anomaly = null;
@@ -86,11 +94,11 @@ export class Utils {
           });
 
           seriesList.push({
-            target: jobIdWithPartField + ' actual',
+            target: prefix ? jobIdWithPartField + ' actual' : 'actual',
             datapoints: actualSeries,
           });
           seriesList.push({
-            target: jobIdWithPartField + ' score',
+            target: prefix ? jobIdWithPartField + ' score' : 'score',
             datapoints: scoreSeries,
           });
           //Sort baseline is score value.
@@ -99,17 +107,17 @@ export class Utils {
             datapoints: scoreSeries,
           });
           seriesList.push({
-            target: jobIdWithPartField + ' anomaly',
+            target: prefix ? jobIdWithPartField + ' anomaly' : 'anomaly',
             datapoints: anomalySeries,
           });
           seriesList.push({
-            target: jobIdWithPartField + ' expected',
+            target: prefix ? jobIdWithPartField + ' expected' : 'expected',
             datapoints: expectedSeries,
           });
         });
       });
       sortBaselineSeries = this.sortList(sortBaselineSeries, topN);
-      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries, indvAnOutField);
+      seriesList = prefix ? this.getSortedSeries(seriesList, sortBaselineSeries, indvAnOutField) : seriesList;
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       const jobs = data.facets.correlation.buckets;
@@ -176,25 +184,26 @@ export class Utils {
       // Heatmap
       seriesList = [];
       const jobs = data.facets.heatMapByPartFieldsFacet.buckets;
+
+      let prefix = false;
+      const groupNames = jobs.map((job: any) => {
+        return groupMap.dashboards[job.val];
+      });
+      prefix = !groupNames.every((val: any, i: any, arr: any) => val === arr[0]); // If all groups are same don't prefix
+
       jobs.forEach((job: any) => {
         const partBuckets = job.partField.buckets;
+
         partBuckets.forEach((partField: any) => {
           const score: number = partField.s;
           const dayBuckets = partField.Day0.buckets;
-          const seriesData: any[] = [];
-          dayBuckets.forEach((bucket: any) => {
-            const d: Date = new Date(bucket.val);
-            if (bucket.score != null && bucket.score.score != null) {
-              seriesData.push([bucket.score.score, d.getTime()]);
-            } else {
-              seriesData.push([0, d.getTime()]);
-            }
-          });
+          const seriesData: any[] = this.getSeriesData(dayBuckets);
+
           // Derive series name from part fields
           const partFieldJson = JSON.parse(partField.val);
           const dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
           const panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
-          let seriesName = dashboardName + panelName;
+          let seriesName = prefix ? dashboardName + panelName : '';
           Object.keys(partFieldJson).forEach(key => {
             if (key === 'aggr_field') {
               return;
@@ -220,21 +229,20 @@ export class Utils {
       // Heatmap
       seriesList = [];
       const jobs = data.facets.heatMapFacet.buckets;
+
+      let prefix = false;
+      const groupNames = jobs.map((job: any) => {
+        return groupMap.dashboards[job.val];
+      });
+      prefix = !groupNames.every((val: any, i: any, arr: any) => val === arr[0]); // If all groups are same don't prefix
+
       jobs.forEach((job: any) => {
         const dayBuckets = job.Day0.buckets;
-        const seriesData: any[] = [];
-        dayBuckets.forEach((bucket: any) => {
-          const d: Date = new Date(bucket.val);
-          if (bucket.score != null && bucket.score.score != null) {
-            seriesData.push([bucket.score.score, d.getTime()]);
-          } else {
-            seriesData.push([0, d.getTime()]);
-          }
-        });
+        const seriesData: any[] = this.getSeriesData(dayBuckets);
 
         const dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
         const panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
-        const targetName = dashboardName + panelName;
+        const targetName = prefix ? dashboardName + panelName : panelName;
         seriesList.push({
           jobId: job.val,
           target: targetName !== '' ? targetName : job.val,
@@ -357,7 +365,13 @@ export class Utils {
           if (doc[cpValueKey] || doc[cpValueKey] === 0) {
             row.push(doc[cpValueKey]);
           }
-          rows.push(row);
+
+          if (row.length > 0) {
+            rows.push(row);
+            return true;
+          }
+
+          return false;
         });
       });
 
@@ -380,6 +394,36 @@ export class Utils {
     return {
       data: seriesList,
     };
+  }
+
+  static getSeriesData(dayBuckets: any[]) {
+    const seriesData: any[] = [];
+    dayBuckets.forEach((bucket: any) => {
+      const d: Date = new Date(bucket.val);
+      if (bucket.score && bucket.score.severity && bucket.score.severity) {
+        const sevBuckets: any[] = bucket.score.severity.buckets;
+
+        let sevBucket = sevBuckets.find((sevObj: any) => {
+          return sevObj.val === 'Critical';
+        });
+
+        if (!sevBucket) {
+          sevBucket = sevBuckets.find((sevObj: any) => {
+            return sevObj.val === 'Warning';
+          });
+        }
+
+        if (sevBucket) {
+          seriesData.push([sevBucket.score, d.getTime()]);
+        } else {
+          seriesData.push([0, d.getTime()]);
+        }
+      } else {
+        seriesData.push([0, d.getTime()]);
+      }
+    });
+
+    return seriesData;
   }
 
   static getAnnotations(response: any, type: string, color: string) {
@@ -409,7 +453,9 @@ export class Utils {
           };
 
           events.push(event);
+          return true;
         }
+        return false;
       });
     });
 
@@ -449,7 +495,7 @@ export class Utils {
     return seriesListOutput;
   }
 
-  static mapToTextValue(result: any) {
+  static mapToTextValue(result: any, addQuotes: boolean) {
     if (result.data && result.data.collections) {
       return result.data.collections.map((collection: string) => {
         return {
@@ -488,7 +534,7 @@ export class Utils {
                 .replace(/}/g, '\\}');
             }
             ar.push({
-              text: '"' + text + '"',
+              text: addQuotes ? '"' + text + '"' : text,
               expandable: false,
             });
           }

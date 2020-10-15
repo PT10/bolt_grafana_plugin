@@ -400,9 +400,20 @@ function (_super) {
     _this.rawCollectionWindow = 1;
     _this.totalCount = undefined;
     _this.facets = {
-      aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"sort":"s desc","type":"terms","field":"jobId",' + '"facet":{"s": "max(score_value)", "Day0":{"type":"range",' + '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' + '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',
-      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit": __TOPN__,"type":"terms","field":"jobId",' + '"facet":{"partField":{"type":"terms","field":"partition_fields","limit": __TOPN__,"sort":"s desc",' + '"facet":{"s":"max(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' + '"gap":"__AGG_INTERVAL__",' + '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',
-      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"}}}}}}}}',
+      aggAnomaly: '{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"sort":"s desc","type":"terms","field":"jobId",' + '"facet":{"s":"max(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__",' + '"end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]"' + ',"facet":{"severity":{"type":"terms","field":"Severity_s","facet":{"score":"max(score_value)"}}}}}}}}}',
+
+      /*'{"heatMapFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"sort":"s desc","type":"terms","field":"jobId",' +
+        '"facet":{"s": "max(score_value)", "Day0":{"type":"range",' +
+        '"field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":{"score":{"type":"query",' +
+        '"q":"score_value:[__SCORE_THRESHOLD__ TO *]", "facet":{"score":"max(score_value)"}}}}}}}',*/
+      aggAnomalyByPartFields: '{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"partField":' + '{"type":"terms","field":"partition_fields","limit":__TOPN__,"sort":"s desc","facet":{"s":"max(score_value)","Day0":{' + '"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__","gap":"__AGG_INTERVAL__","facet":' + '{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)","severity":' + '{"type":"terms","field":"Severity_s","facet":{"score":"max(score_value)"}}}}}}}}}}}',
+
+      /*'{"heatMapByPartFieldsFacet":{"numBuckets":true,"offset":0,"limit": __TOPN__,"type":"terms","field":"jobId",' +
+        '"facet":{"partField":{"type":"terms","field":"partition_fields","limit": __TOPN__,"sort":"s desc",' +
+        '"facet":{"s":"max(score_value)","Day0":{"type":"range","field":"timestamp","start":"__START_TIME__","end":"__END_TIME__",' +
+        '"gap":"__AGG_INTERVAL__",' +
+        '"facet":{"score":{"type":"query","q":"score_value:[__SCORE_THRESHOLD__ TO *]","facet":{"score":"max(score_value)"}}}}}}}}}',*/
+      indvAnomaly: '{"lineChartFacet":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"max(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","facet":{"actual":{"type":"terms","field":"actual_value"}, ' + '"score":{"type":"terms","field":"score_value"},"anomaly":{"type":"terms","field":"is_anomaly"},' + '"expected":{"type":"terms","field":"expected_value"},"severity": {"type": "terms","field": "Severity_s"}}}}}}}}',
       correlation: '{"correlation":{"numBuckets":true,"offset":0,"limit":__TOPN__,"type":"terms","field":"jobId","facet":{"group":{"numBuckets":true,' + '"offset":0,"limit":__TOPN__,"type":"terms","field":"partition_fields","sort":"s desc","ss":"sum(s)","facet":{"s":"sum(score_value)",' + '"timestamp":{"type":"terms","limit":-1,"field":"timestamp","sort":"index","facet":{"actual":{"type":"terms","field":"actual_value"}}}}}}}}'
     };
     _this.stats = {
@@ -451,15 +462,26 @@ function (_super) {
       return Promise.resolve([]);
     }
 
-    var pattern1 = /^getPageCount\(\$(.*),\s*\$(.*)\)$/;
-    var pattern2 = /^(.*)\((.*):\s*(.*),\s*(.*)\)$/;
+    var pattern1 = /^getPageCount\(\$(.*),\s*\$(.*)\)$/; //const pattern2 = /^(.*)\((.*):\s*(.*),\s*(.*)\)$/;
+
+    var pattern2 = /^(.*)\((.*)\)$/;
     var matches1 = query.match(pattern1);
     var matches2 = query.match(pattern2);
 
     if (matches1 && matches1.length === 3) {
       return this.getTotalCount(matches1);
-    } else if (matches2 && matches2.length === 5) {
-      return this.getFields(matches2);
+    } else if (matches2) {
+      var tokens = matches2[2].split(/,\s*/);
+      var queryParts = tokens[0].split(/:\s*/);
+      var tokenArr = [];
+      tokenArr.push(matches2[0]);
+      tokenArr.push(matches2[1]);
+      tokenArr.push(queryParts[0]);
+      tokenArr.push(queryParts[1]);
+      tokenArr.push(tokens[1]);
+      var addQuotes = tokens[2] || 'true';
+      tokenArr.push(JSON.parse(addQuotes));
+      return this.getFields(tokenArr);
     } else {
       return Promise.reject({
         status: 'error',
@@ -749,6 +771,7 @@ function (_super) {
     var filterField = matches[2];
     var filterFieldVal = matches[3].replace('$', '');
     var field = matches[4];
+    var addQuotes = matches[5];
     var variable = this.templateSrv.variables.find(function (v) {
       return v.name === filterFieldVal;
     });
@@ -812,7 +835,7 @@ function (_super) {
     };
     return this.backendSrv.datasourceRequest(params).then(function (response) {
       if (response.status === 200) {
-        return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].mapToTextValue(response);
+        return datasourceUtils__WEBPACK_IMPORTED_MODULE_3__["Utils"].mapToTextValue(response, addQuotes);
       } else {
         return Promise.reject([{
           status: 'error',
@@ -1061,8 +1084,14 @@ function () {
       seriesList = [];
       var sortBaselineSeries_1 = [];
       var jobs = data.facets.lineChartFacet.buckets;
+      var prefix_1 = false;
       jobs.forEach(function (job) {
         var partFields = job.group.buckets;
+
+        if (partFields.length > 1) {
+          prefix_1 = true;
+        }
+
         partFields.forEach(function (partField) {
           var dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
           var panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
@@ -1089,12 +1118,13 @@ function () {
           buckets.forEach(function (timeBucket) {
             var d = new Date(timeBucket.val);
             var ts = d.getTime();
+            var severity = timeBucket.severity.buckets[0].val;
             var actual = timeBucket.actual.buckets[0].val;
             var score = timeBucket.score.buckets[0].val;
             var anomaly = timeBucket.anomaly.buckets[0].val;
             var expected = timeBucket.expected.buckets[0].val;
 
-            if (score >= anomalyThreshold && anomaly) {
+            if (['Critical', 'Warning'].includes(severity) && score >= anomalyThreshold && anomaly) {
               anomaly = actual;
             } else {
               anomaly = null;
@@ -1107,11 +1137,11 @@ function () {
             expectedSeries.push([expected, ts]);
           });
           seriesList.push({
-            target: jobIdWithPartField + ' actual',
+            target: prefix_1 ? jobIdWithPartField + ' actual' : 'actual',
             datapoints: actualSeries
           });
           seriesList.push({
-            target: jobIdWithPartField + ' score',
+            target: prefix_1 ? jobIdWithPartField + ' score' : 'score',
             datapoints: scoreSeries
           }); //Sort baseline is score value.
 
@@ -1120,17 +1150,17 @@ function () {
             datapoints: scoreSeries
           });
           seriesList.push({
-            target: jobIdWithPartField + ' anomaly',
+            target: prefix_1 ? jobIdWithPartField + ' anomaly' : 'anomaly',
             datapoints: anomalySeries
           });
           seriesList.push({
-            target: jobIdWithPartField + ' expected',
+            target: prefix_1 ? jobIdWithPartField + ' expected' : 'expected',
             datapoints: expectedSeries
           });
         });
       });
       sortBaselineSeries_1 = this.sortList(sortBaselineSeries_1, topN);
-      seriesList = this.getSortedSeries(seriesList, sortBaselineSeries_1, indvAnOutField);
+      seriesList = prefix_1 ? this.getSortedSeries(seriesList, sortBaselineSeries_1, indvAnOutField) : seriesList;
     } else if (data.facets && data.facets.correlation) {
       seriesList = [];
       var jobs = data.facets.correlation.buckets;
@@ -1191,26 +1221,27 @@ function () {
       // Heatmap
       seriesList = [];
       var jobs = data.facets.heatMapByPartFieldsFacet.buckets;
+      var prefix_2 = false;
+      var groupNames = jobs.map(function (job) {
+        return groupMap.dashboards[job.val];
+      });
+      prefix_2 = !groupNames.every(function (val, i, arr) {
+        return val === arr[0];
+      }); // If all groups are same don't prefix
+
       jobs.forEach(function (job) {
         var partBuckets = job.partField.buckets;
         partBuckets.forEach(function (partField) {
           var score = partField.s;
           var dayBuckets = partField.Day0.buckets;
-          var seriesData = [];
-          dayBuckets.forEach(function (bucket) {
-            var d = new Date(bucket.val);
 
-            if (bucket.score != null && bucket.score.score != null) {
-              seriesData.push([bucket.score.score, d.getTime()]);
-            } else {
-              seriesData.push([0, d.getTime()]);
-            }
-          }); // Derive series name from part fields
+          var seriesData = _this.getSeriesData(dayBuckets); // Derive series name from part fields
+
 
           var partFieldJson = JSON.parse(partField.val);
           var dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
           var panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
-          var seriesName = dashboardName + panelName;
+          var seriesName = prefix_2 ? dashboardName + panelName : '';
           Object.keys(partFieldJson).forEach(function (key) {
             if (key === 'aggr_field') {
               return;
@@ -1236,21 +1267,22 @@ function () {
       // Heatmap
       seriesList = [];
       var jobs = data.facets.heatMapFacet.buckets;
+      var prefix_3 = false;
+      var groupNames = jobs.map(function (job) {
+        return groupMap.dashboards[job.val];
+      });
+      prefix_3 = !groupNames.every(function (val, i, arr) {
+        return val === arr[0];
+      }); // If all groups are same don't prefix
+
       jobs.forEach(function (job) {
         var dayBuckets = job.Day0.buckets;
-        var seriesData = [];
-        dayBuckets.forEach(function (bucket) {
-          var d = new Date(bucket.val);
 
-          if (bucket.score != null && bucket.score.score != null) {
-            seriesData.push([bucket.score.score, d.getTime()]);
-          } else {
-            seriesData.push([0, d.getTime()]);
-          }
-        });
+        var seriesData = _this.getSeriesData(dayBuckets);
+
         var dashboardName = groupMap.dashboards[job.val] ? groupMap.dashboards[job.val] + '_' : '';
         var panelName = groupMap.panels[job.val] ? groupMap.panels[job.val] : '';
-        var targetName = dashboardName + panelName;
+        var targetName = prefix_3 ? dashboardName + panelName : panelName;
         seriesList.push({
           jobId: job.val,
           target: targetName !== '' ? targetName : job.val,
@@ -1387,7 +1419,12 @@ function () {
             row.push(doc[cpValueKey]);
           }
 
-          rows_2.push(row);
+          if (row.length > 0) {
+            rows_2.push(row);
+            return true;
+          }
+
+          return false;
         });
       });
       rows_2 = rows_2.sort(function (r1, r2) {
@@ -1407,6 +1444,35 @@ function () {
     return {
       data: seriesList
     };
+  };
+
+  Utils.getSeriesData = function (dayBuckets) {
+    var seriesData = [];
+    dayBuckets.forEach(function (bucket) {
+      var d = new Date(bucket.val);
+
+      if (bucket.score && bucket.score.severity && bucket.score.severity) {
+        var sevBuckets = bucket.score.severity.buckets;
+        var sevBucket = sevBuckets.find(function (sevObj) {
+          return sevObj.val === 'Critical';
+        });
+
+        if (!sevBucket) {
+          sevBucket = sevBuckets.find(function (sevObj) {
+            return sevObj.val === 'Warning';
+          });
+        }
+
+        if (sevBucket) {
+          seriesData.push([sevBucket.score, d.getTime()]);
+        } else {
+          seriesData.push([0, d.getTime()]);
+        }
+      } else {
+        seriesData.push([0, d.getTime()]);
+      }
+    });
+    return seriesData;
   };
 
   Utils.getAnnotations = function (response, type, color) {
@@ -1433,7 +1499,10 @@ function () {
             }
           };
           events.push(event);
+          return true;
         }
+
+        return false;
       });
     });
     return events;
@@ -1470,7 +1539,7 @@ function () {
     return seriesListOutput;
   };
 
-  Utils.mapToTextValue = function (result) {
+  Utils.mapToTextValue = function (result, addQuotes) {
     if (result.data && result.data.collections) {
       return result.data.collections.map(function (collection) {
         return {
@@ -1507,7 +1576,7 @@ function () {
             }
 
             ar.push({
-              text: '"' + text + '"',
+              text: addQuotes ? '"' + text + '"' : text,
               expandable: false
             });
           }
