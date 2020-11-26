@@ -1229,6 +1229,7 @@ function () {
         return val === arr[0];
       }); // If all groups are same don't prefix
 
+      var uniqueNames_1 = {};
       jobs.forEach(function (job) {
         var partBuckets = job.partField.buckets;
         partBuckets.forEach(function (partField) {
@@ -1253,6 +1254,18 @@ function () {
 
           if (seriesName.startsWith('_')) {
             seriesName = seriesName.slice(1);
+          }
+
+          if (query.labelSize > -1 && seriesName.length > +query.labelSize + 3) {
+            // 3 represents 3 dots for elipsis
+            seriesName = seriesName.substr(0, +query.labelSize / 2) + '...' + seriesName.substr(seriesName.length - +query.labelSize / 2);
+
+            if (uniqueNames_1[seriesName] > 0) {
+              uniqueNames_1[seriesName] = uniqueNames_1[seriesName]++;
+              seriesName = seriesName + '_' + uniqueNames_1[seriesName];
+            } else {
+              uniqueNames_1[seriesName] = 1;
+            }
           }
 
           seriesList.push({
@@ -1841,6 +1854,7 @@ function (_super) {
       facetQuery: query.facetQuery,
       sortField: query.sortField,
       sortOrder: query.sortOrder,
+      labelSize: query.labelSize || -1,
       rexQuery: query.rexQuery || '\\s*.*\\s*\\[c\\:(.*)\\ss\\:(.*)\\sr\\:(.*)\\sx\\:(.*)\\]\\s*o.a.s.c.S.SlowRequest.*path=(.*)\\s*' + 'params=\\{(.*)\\}\\s*.*hits=(.*)\\s*status.*QTime=(.*)',
       rexOutFields: query.rexOutFields || 'collection,shard,replica,core,handler,params,hits,qtime',
       baseMetric: query.baseMetric,
@@ -1898,6 +1912,7 @@ function (_super) {
         sortField = _a.sortField,
         sortOrder = _a.sortOrder,
         rexQuery = _a.rexQuery,
+        labelSize = _a.labelSize,
         rexOutFields = _a.rexOutFields,
         baseMetric = _a.baseMetric,
         groupEnabled = _a.groupEnabled,
@@ -1944,6 +1959,8 @@ function (_super) {
     }, 'sum'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
       value: 'mean'
     }, 'mean'))), queryType === 'aggAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form-inline"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["InlineFormLabel"], null, "Group Results"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
       value: groupEnabled,
@@ -1954,7 +1971,17 @@ function (_super) {
       value: 'true'
     }, 'true'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
       value: 'false'
-    }, 'false'))), queryType === 'indvAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }, 'false'))), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
+      label: "Aggregation Interval",
+      type: "text",
+      value: aggInterval,
+      labelWidth: 12,
+      width: 4,
+      name: "aggInterval",
+      onChange: this.onFieldValueChange
+    }))), queryType === 'indvAnomaly' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(_grafana_ui__WEBPACK_IMPORTED_MODULE_2__["InlineFormLabel"], null, "Out Field"), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("select", {
       value: indvAnOutField,
@@ -1971,7 +1998,7 @@ function (_super) {
       value: 'expected'
     }, 'Expected'), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("option", {
       value: 'anomaly'
-    }, 'Anomaly'))), (queryType === 'aggAnomaly' || queryType === 'aggAnomalyByPartFields') && // <div className="gf-form">
+    }, 'Anomaly'))), queryType === 'aggAnomalyByPartFields' && // <div className="gf-form">
     //   <FormLabel width={14}>Aggregation Level</FormLabel>
     //   <select
     //     value={aggInterval}
@@ -1984,6 +2011,17 @@ function (_super) {
     //   </select>
     // </div>
     react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form-inline"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+      className: "gf-form"
+    }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
+      label: "Label size",
+      type: "number",
+      value: labelSize,
+      width: 4,
+      name: "labelSize",
+      onChange: this.onFieldValueChange
+    })), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Aggregation Interval",
@@ -1993,7 +2031,7 @@ function (_super) {
       width: 4,
       name: "aggInterval",
       onChange: this.onFieldValueChange
-    })), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && queryType !== 'metaBar' && queryType !== 'metaCp' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
+    }))), queryType !== 'aggAnomaly' && queryType !== 'indvAnomaly' && queryType !== 'correlation' && queryType !== 'aggAnomalyByPartFields' && queryType !== 'metaBar' && queryType !== 'metaCp' && react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("div", {
       className: "gf-form"
     }, react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(FormField, {
       label: "Collection",

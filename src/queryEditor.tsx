@@ -54,6 +54,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       facetQuery: query.facetQuery,
       sortField: query.sortField,
       sortOrder: query.sortOrder,
+      labelSize: query.labelSize || -1,
       rexQuery:
         query.rexQuery ||
         '\\s*.*\\s*\\[c\\:(.*)\\ss\\:(.*)\\sr\\:(.*)\\sx\\:(.*)\\]\\s*o.a.s.c.S.SlowRequest.*path=(.*)\\s*' +
@@ -130,6 +131,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
       sortField,
       sortOrder,
       rexQuery,
+      labelSize,
       rexOutFields,
       baseMetric,
       groupEnabled,
@@ -185,17 +187,30 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
           )}
           {/* Show group by infor for aggregated anomalies */}
           {queryType === 'aggAnomaly' && (
-            <div className="gf-form">
-              <InlineFormLabel>Group Results</InlineFormLabel>
-              <select
-                value={groupEnabled}
-                onChange={(event: any) => {
-                  this.onFieldValueChange(event, 'groupEnabled');
-                }}
-              >
-                <option value={'true'}>{'true'}</option>
-                <option value={'false'}>{'false'}</option>
-              </select>
+            <div className="gf-form-inline">
+              <div className="gf-form">
+                <InlineFormLabel>Group Results</InlineFormLabel>
+                <select
+                  value={groupEnabled}
+                  onChange={(event: any) => {
+                    this.onFieldValueChange(event, 'groupEnabled');
+                  }}
+                >
+                  <option value={'true'}>{'true'}</option>
+                  <option value={'false'}>{'false'}</option>
+                </select>
+              </div>
+              <div className="gf-form">
+                <FormField
+                  label="Aggregation Interval"
+                  type="text"
+                  value={aggInterval}
+                  labelWidth={12}
+                  width={4}
+                  name="aggInterval"
+                  onChange={this.onFieldValueChange}
+                ></FormField>
+              </div>
             </div>
           )}
           {/* Show out fields for individual anomalies (alerts requirement) */}
@@ -216,7 +231,7 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
               </select>
             </div>
           )}
-          {(queryType === 'aggAnomaly' || queryType === 'aggAnomalyByPartFields') && (
+          {queryType === 'aggAnomalyByPartFields' && (
             // <div className="gf-form">
             //   <FormLabel width={14}>Aggregation Level</FormLabel>
             //   <select
@@ -229,16 +244,28 @@ export class BoltQueryEditor extends PureComponent<Props, State> {
             //     <option value={'+1MINUTE'}>{'Minute'}</option>
             //   </select>
             // </div>
-            <div className="gf-form">
-              <FormField
-                label="Aggregation Interval"
-                type="text"
-                value={aggInterval}
-                labelWidth={12}
-                width={4}
-                name="aggInterval"
-                onChange={this.onFieldValueChange}
-              ></FormField>
+            <div className="gf-form-inline">
+              <div className="gf-form">
+                <FormField
+                  label="Label size"
+                  type="number"
+                  value={labelSize}
+                  width={4}
+                  name="labelSize"
+                  onChange={this.onFieldValueChange}
+                ></FormField>
+              </div>
+              <div className="gf-form">
+                <FormField
+                  label="Aggregation Interval"
+                  type="text"
+                  value={aggInterval}
+                  labelWidth={12}
+                  width={4}
+                  name="aggInterval"
+                  onChange={this.onFieldValueChange}
+                ></FormField>
+              </div>
             </div>
           )}
           {/* Show collection name textbox */}

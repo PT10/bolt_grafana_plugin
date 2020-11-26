@@ -30,6 +30,7 @@ export interface BoltQuery extends DataQuery {
   sortOrder: string;
   rexQuery: string;
   rexOutFields: string;
+  labelSize: number;
   baseMetric: string;
   groupEnabled: string;
   aggInterval: string;

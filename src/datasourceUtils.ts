@@ -191,6 +191,7 @@ export class Utils {
       });
       prefix = !groupNames.every((val: any, i: any, arr: any) => val === arr[0]); // If all groups are same don't prefix
 
+      const uniqueNames: any = {};
       jobs.forEach((job: any) => {
         const partBuckets = job.partField.buckets;
 
@@ -214,6 +215,21 @@ export class Utils {
 
           if (seriesName.startsWith('_')) {
             seriesName = seriesName.slice(1);
+          }
+
+          if (query.labelSize > -1 && seriesName.length > +query.labelSize + 3) {
+            // 3 represents 3 dots for elipsis
+            seriesName =
+              seriesName.substr(0, +query.labelSize / 2) +
+              '...' +
+              seriesName.substr(seriesName.length - +query.labelSize / 2);
+
+            if (uniqueNames[seriesName] > 0) {
+              uniqueNames[seriesName] = uniqueNames[seriesName]++;
+              seriesName = seriesName + '_' + uniqueNames[seriesName];
+            } else {
+              uniqueNames[seriesName] = 1;
+            }
           }
 
           seriesList.push({
